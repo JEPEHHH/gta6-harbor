@@ -297,7 +297,7 @@ export function drawTitle(ctx, g, t) {
 
   ctx.fillStyle = 'rgba(159,176,186,0.7)';
   ctx.font = `500 12px ${FONT}`;
-  ctx.fillText('Blackwater Harbor · v0.1 · every pixel drawn by this game', 92, 692);
+  ctx.fillText('Blackwater Harbor · v0.1 · original — every pixel drawn by this engine', 92, 692);
 }
 
 export function drawPause(ctx, g) {

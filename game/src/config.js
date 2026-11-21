@@ -81,3 +81,10 @@ export const PALETTE = {
 export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 
 export const SAVE_KEY = 'blackwater-harbor.save.v1';
+
+/** Weapon definitions used by combat.js (milestone B). */
+export const WEAPONS = {
+  fist: { name: 'Fist', damage: 8, range: 22, rate: 0.4, ammo: Infinity },
+  pistol: { name: 'Pistol', damage: 22, range: 600, rate: 0.28, ammo: 12 },
+  smg: { name: 'SMG', damage: 14, range: 480, rate: 0.08, ammo: 30 },
+};

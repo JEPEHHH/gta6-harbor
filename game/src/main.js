@@ -38,10 +38,11 @@ const game = {
   saveExists: hasSave(),
   saveFlash: 0,
   titleItems: [],
-  // Filled by milestone B: traffic, peds, police, vehicles.
+  // Filled by milestone B: traffic, peds, police, vehicles, bullets.
   traffic: [],
   peds: [],
   police: [],
+  bullets: [],
 };
 
 function announce(message) {

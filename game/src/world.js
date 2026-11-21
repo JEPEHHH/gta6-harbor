@@ -229,6 +229,22 @@ export function createWorld(seed = CITY_SEED) {
     return { x: clamp(x, r, CITY.width - r), y: clamp(y, r, CITY.height - r) };
   }
 
+  /** Snap a world point to the nearest road centre-line, for traffic spawning. */
+  function nearestRoad(x, y) {
+    let bestDist = Infinity;
+    let bestX = x;
+    let bestY = y;
+    for (const v of roadsV) {
+      const d = Math.abs(x - v);
+      if (d < bestDist) { bestDist = d; bestX = v; bestY = y; }
+    }
+    for (const h of roadsH) {
+      const d = Math.abs(y - h);
+      if (d < bestDist) { bestDist = d; bestX = x; bestY = h; }
+    }
+    return { x: bestX, y: bestY };
+  }
+
   function surfaceAt(x, y) {
     if (isWater(x, y)) return 'water';
     if (y > CITY.beachY) return 'sand';
@@ -255,6 +271,7 @@ export function createWorld(seed = CITY_SEED) {
     isWater,
     districtAt,
     moveCircle,
+    nearestRoad,
     surfaceAt,
   };
 }

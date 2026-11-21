@@ -264,6 +264,15 @@ export function createRenderer(canvas) {
     }
     ctx.restore();
 
+    // Bullets — small bright dots.
+    for (const bl of (g.bullets ?? [])) {
+      const a = Math.max(0, 1 - bl.age / bl.life);
+      ctx.fillStyle = `rgba(255,230,160,${a.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(bl.x, bl.y, 2.2, 0, TAU);
+      ctx.fill();
+    }
+
     // Vignette in screen space.
     const vig = ctx.createRadialGradient(cssW / 2, cssH / 2, Math.min(cssW, cssH) * 0.42, cssW / 2, cssH / 2, Math.hypot(cssW, cssH) * 0.55);
     vig.addColorStop(0, 'rgba(4,6,12,0)');
