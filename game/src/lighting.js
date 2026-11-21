@@ -168,7 +168,7 @@ export function drawVehicleShadow(ctx, x, y, w, h, angle, sun, lift = 14) {
 }
 
 /** World-space night multiply, warm sodium streetlamps, dockside neon & night-only mild bloom. */
-export function drawWorldLighting(ctx, world, view, night, dusk, t) {
+export function drawWorldLighting(ctx, world, view, night, dusk, t, cam = null) {
   // 1. Night & twilight color multiply (deep marine indigo, never flat grey)
   const shadeAmt = clamp(night * 0.74 + dusk * 0.22, 0, 0.78);
   if (shadeAmt > 0.02) {
@@ -246,6 +246,60 @@ export function drawWorldLighting(ctx, world, view, night, dusk, t) {
         ctx.arc(n.x, n.y, coreR, 0, TAU);
         ctx.fill();
       }
+    }
+    ctx.restore();
+  }
+
+  // 4. Sweeping volumetric Harbour Lighthouse beam & Stadium floodlights at dusk/night
+  const beaconPower = clamp(night * 1.1 + dusk * 0.75, 0, 1);
+  if (beaconPower > 0.12 && world.landmarks) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const lh of (world.landmarks.lighthouses || [])) {
+      if (lh.x < view.x - 420 || lh.x > view.x + view.w + 420 || lh.y < view.y - 420 || lh.y > view.y + view.h + 420) continue;
+      const sweepAngle = -2.35 + Math.sin(t * 0.55) * 0.55;
+      const beamLen = 320;
+      const spread = 0.22;
+      const bx = cam ? lh.x + (lh.x - cam.x) * lh.ht * 0.0012 : lh.x;
+      const by = cam ? lh.y + (lh.y - cam.y) * lh.ht * 0.0012 : lh.y;
+      const grad = ctx.createRadialGradient(bx, by, 6, bx, by, beamLen);
+      grad.addColorStop(0, `rgba(255, 244, 188, ${(0.52 * beaconPower).toFixed(3)})`);
+      grad.addColorStop(0.35, `rgba(255, 224, 136, ${(0.24 * beaconPower).toFixed(3)})`);
+      grad.addColorStop(1, 'rgba(255, 210, 120, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.arc(bx, by, beamLen, sweepAngle - spread, sweepAngle + spread);
+      ctx.closePath();
+      ctx.fill();
+
+      // Secondary opposite beam lobe
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.arc(bx, by, beamLen * 0.65, sweepAngle + Math.PI - spread * 0.85, sweepAngle + Math.PI + spread * 0.85);
+      ctx.closePath();
+      ctx.fill();
+
+      // Warm lantern halo
+      const halo = ctx.createRadialGradient(bx, by, 4, bx, by, 72);
+      halo.addColorStop(0, `rgba(255, 248, 210, ${(0.62 * beaconPower).toFixed(3)})`);
+      halo.addColorStop(1, 'rgba(255, 210, 120, 0)');
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(bx, by, 72, 0, TAU);
+      ctx.fill();
+    }
+
+    for (const st of (world.landmarks.stadiums || [])) {
+      if (st.cx < view.x - 240 || st.cx > view.x + view.w + 240 || st.cy < view.y - 240 || st.cy > view.y + view.h + 240) continue;
+      const sGrad = ctx.createRadialGradient(st.cx, st.cy, 20, st.cx, st.cy, st.rx * 1.15);
+      sGrad.addColorStop(0, `rgba(220, 244, 255, ${(0.34 * beaconPower).toFixed(3)})`);
+      sGrad.addColorStop(0.65, `rgba(140, 210, 245, ${(0.14 * beaconPower).toFixed(3)})`);
+      sGrad.addColorStop(1, 'rgba(140, 210, 245, 0)');
+      ctx.fillStyle = sGrad;
+      ctx.beginPath();
+      ctx.arc(st.cx, st.cy, st.rx * 1.15, 0, TAU);
+      ctx.fill();
     }
     ctx.restore();
   }

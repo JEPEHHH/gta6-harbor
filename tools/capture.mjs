@@ -256,10 +256,10 @@ function writeIndexedPng(w, h, palette, indices) {
   ]);
 }
 
-function quantizePngFile(path, maxBytes = 262144) {
+function quantizePngFile(path, maxBytes = 260000) {
   const buf = readFileSync(path);
   const rgb = decodePngRgb(buf);
-  const paletteCounts = [256, 224, 192, 160, 128];
+  const paletteCounts = [256, 224, 192, 160, 128, 112, 96];
   let best = null;
   for (const nColors of paletteCounts) {
     const { palette, indices } = quantizeMedianCut(rgb, nColors);
@@ -360,11 +360,11 @@ async function capture() {
     let size = statSync(outPath).size;
     console.log(`Raw render size: ${size} bytes (${(size / 1024).toFixed(1)} KiB)`);
 
-    // Quantize with adaptive palette to guarantee <= 256 KiB
-    size = quantizePngFile(outPath, 262144);
+    // Quantize with adaptive palette to guarantee <= 255 KiB safety margin
+    size = quantizePngFile(outPath, 260000);
     console.log(`Saved ${t.file}: ${size} bytes (${(size / 1024).toFixed(1)} KiB) — ${t.desc}`);
-    if (size > 262144) {
-      throw new Error(`Screenshot ${t.file} exceeds 256 KiB limit: ${size} bytes`);
+    if (size > 261120) {
+      throw new Error(`Screenshot ${t.file} exceeds 255 KiB safety limit: ${size} bytes`);
     }
   }
 

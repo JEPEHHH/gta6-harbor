@@ -46,6 +46,15 @@ export function populateCityClutter(world, seed = CITY_SEED) {
         return true;
       }
     }
+    for (const rl of (world.rubbleLots || [])) {
+      if (x >= rl.x - pad && x <= rl.x + rl.w + pad && y >= rl.y - pad && y <= rl.y + rl.h + pad) return true;
+    }
+    for (const pl of (world.pools || [])) {
+      if (x >= pl.x - pad && x <= pl.x + pl.w + pad && y >= pl.y - pad && y <= pl.y + pl.h + pad) return true;
+    }
+    for (const gd of (world.gardens || [])) {
+      if (x >= gd.x - pad && x <= gd.x + gd.w + pad && y >= gd.y - pad && y <= gd.y + gd.h + pad) return true;
+    }
     return false;
   }
 
@@ -158,6 +167,7 @@ export function populateCityClutter(world, seed = CITY_SEED) {
     const sw = blk.w + CITY.walk * 2;
     const sh = blk.h + CITY.walk * 2;
     const d = blk.district;
+    const lm = blk.landmark;
 
     // Corner hydrants & litter bins along sidewalk corners
     if (!isWater(sx + 8, sy + 8)) {
@@ -165,6 +175,18 @@ export function populateCityClutter(world, seed = CITY_SEED) {
       if (rng() < 0.68) props.push({ kind: 'bin', x: sx + sw - 9, y: sy + 16 });
       if (rng() < 0.65) props.push({ kind: 'bin', x: sx + 12, y: sy + sh - 9 });
       if (rng() < 0.55) props.push({ kind: 'hydrant', x: sx + sw - 7, y: sy + sh - 18 });
+    }
+
+    if (lm === 'construction' || lm === 'stadium') {
+      // Keep landmark plazas clean inside; only place perimeter sidewalk furniture
+      props.push({ kind: 'bench', x: blk.x + 92, y: sy + sh - 8, orient: 'h' });
+      if (lm === 'stadium') {
+        props.push({ kind: 'planter', x: blk.x + 60, y: sy + 7, seed: 7301, shape: 'rect' });
+        props.push({ kind: 'planter', x: blk.x + 260, y: sy + 7, seed: 7302, shape: 'rect' });
+        props.push({ kind: 'planter', x: blk.x + 60, y: sy + sh - 7, seed: 7303, shape: 'rect' });
+        props.push({ kind: 'planter', x: blk.x + 260, y: sy + sh - 7, seed: 7304, shape: 'rect' });
+      }
+      continue;
     }
 
     if (d === 'downtown' || d === 'northgate' || d === 'beachfront') {
@@ -220,15 +242,16 @@ export function populateCityClutter(world, seed = CITY_SEED) {
         }
       }
     } else if (d === 'suburbs') {
-      // Wooden yard divider fences along property lines & hedges
-      fences.push({ x1: blk.x + blk.w * 0.5, y1: blk.y + 10, x2: blk.x + blk.w * 0.5, y2: blk.y + blk.h - 10, kind: 'wood' });
-      fences.push({ x1: blk.x + 8, y1: blk.y + 108, x2: blk.x + blk.w - 8, y2: blk.y + 108, kind: 'wood' });
-      fences.push({ x1: blk.x + 8, y1: blk.y + 220, x2: blk.x + blk.w - 8, y2: blk.y + 220, kind: 'wood' });
-      // Front yard low fences / hedges with gaps
-      fences.push({ x1: blk.x + 2, y1: blk.y + 2, x2: blk.x + 96, y2: blk.y + 2, kind: 'hedge' });
-      fences.push({ x1: blk.x + 210, y1: blk.y + 2, x2: blk.x + blk.w - 4, y2: blk.y + 2, kind: 'hedge' });
-      fences.push({ x1: blk.x + 2, y1: blk.y + blk.h - 2, x2: blk.x + 110, y2: blk.y + blk.h - 2, kind: 'hedge' });
-      fences.push({ x1: blk.x + 218, y1: blk.y + blk.h - 2, x2: blk.x + blk.w - 4, y2: blk.y + blk.h - 2, kind: 'hedge' });
+      // Wooden yard divider fences along property lines & hedges (skip industrial transition blocks (9,1),(8,2))
+      if (!(blk.i >= 8 && blk.j <= 2)) {
+        fences.push({ x1: blk.x + blk.w * 0.5, y1: blk.y + 10, x2: blk.x + blk.w * 0.5, y2: blk.y + blk.h - 10, kind: 'wood' });
+        fences.push({ x1: blk.x + 8, y1: blk.y + 168, x2: blk.x + blk.w - 8, y2: blk.y + 168, kind: 'wood' });
+        // Front yard low hedges with driveway gaps
+        fences.push({ x1: blk.x + 2, y1: blk.y + 2, x2: blk.x + 96, y2: blk.y + 2, kind: 'hedge' });
+        fences.push({ x1: blk.x + 210, y1: blk.y + 2, x2: blk.x + blk.w - 4, y2: blk.y + 2, kind: 'hedge' });
+        fences.push({ x1: blk.x + 2, y1: blk.y + blk.h - 2, x2: blk.x + 110, y2: blk.y + blk.h - 2, kind: 'hedge' });
+        fences.push({ x1: blk.x + 218, y1: blk.y + blk.h - 2, x2: blk.x + blk.w - 4, y2: blk.y + blk.h - 2, kind: 'hedge' });
+      }
 
       // Extra backyard trees/palms & sidewalk benches
       for (let t = 0; t < 4; t += 1) {
@@ -315,12 +338,12 @@ export function populateCityClutter(world, seed = CITY_SEED) {
     }
   }
 
-  // 6. Coral Beach umbrellas, towels & elevated wooden lifeguard towers
+  // 6. Coral Beach umbrellas, towels & elevated wooden lifeguard towers (positioned south of timber boardwalk)
   for (let x = 360; x < 4420; x += 480) {
     props.push({
       kind: 'lifeguard',
       x: x + range(rng, -40, 40),
-      y: CITY.beachY + 62,
+      y: CITY.beachY + 72,
       ph: range(rng, 0, TAU),
     });
   }
@@ -329,16 +352,12 @@ export function populateCityClutter(world, seed = CITY_SEED) {
       props.push({
         kind: 'umbrella',
         x: x + range(rng, -26, 26),
-        y: CITY.beachY + range(rng, 44, 118),
+        y: CITY.beachY + range(rng, 56, 122),
         colors: pick(rng, UMBRELLA_PALETTES),
         r: range(rng, 12, 16),
         angle: range(rng, 0, TAU),
       });
     }
-  }
-  // Beachfront promenade railing along north edge of sand
-  for (let x = 180; x < 4460; x += 160) {
-    fences.push({ x1: x, y1: CITY.beachY + 3, x2: x + 128, y2: CITY.beachY + 3, kind: 'iron' });
   }
 
   // 7. Roadside billboards along coastal boulevard & major avenues

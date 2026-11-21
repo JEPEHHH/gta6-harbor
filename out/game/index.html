@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Blackwater Harbor</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0a121a; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+  /* Read aloud, never shown: the status line screen readers announce. */
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  noscript { position: fixed; inset: 0; display: grid; place-items: center; color: #f2f5f7; font: 600 18px system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Blackwater Harbor: an open-world harbour city. WASD to move, Shift to sprint, F to enter a vehicle, P to pause."></canvas>
+<p id="status" role="status" aria-live="polite"></p>
+<noscript>Blackwater Harbor needs JavaScript to run.</noscript>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

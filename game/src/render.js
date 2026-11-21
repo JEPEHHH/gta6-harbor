@@ -6,6 +6,7 @@
 import { CITY, PALETTE } from './config.js';
 import { TAU, rectsOverlap } from './util.js';
 import { drawBuilding, drawConstructionLot, drawNeonSign } from './buildings.js';
+import { drawBandstand, drawLandmarkGrounds, drawLighthouse, drawStadium } from './landmarks.js';
 import { drawProp, drawFence } from './props.js';
 import { drawPlayer } from './player.js';
 import { drawHUD, drawPause, drawTitle } from './hud.js';
@@ -126,82 +127,57 @@ function drawGround(ctx, world, view, t, tex, dusk, night, sun) {
     ctx.strokeRect(dw.x + 0.5, dw.y + 0.5, dw.w - 1, dw.h - 1);
   }
 
-  // 4. Construction lots with gravel pads & perimeter fencing
+  // 4. Construction lots, parks, boardwalk, rubble lots, gardens, pools & landmark grounds
   for (const lot of (world.constructionLots || [])) {
     if (!rectsOverlap(lot, view)) continue;
     drawConstructionLot(ctx, lot);
   }
+  drawLandmarkGrounds(ctx, world, view, t, sun);
 
-  // 5. Park paths, shaded pond and animated fountain
-  for (const d of world.decor) {
-    if (d.kind === 'path') {
-      ctx.fillStyle = '#e0d5b8';
-      ctx.fillRect(d.x, d.y, d.w, d.h);
-      ctx.strokeStyle = 'rgba(116, 104, 80, 0.36)';
-      ctx.lineWidth = 1.2;
-      ctx.strokeRect(d.x + 0.5, d.y + 0.5, d.w - 1, d.h - 1);
-    } else if (d.kind === 'pond') {
-      const pcx = d.x + d.w * 0.5;
-      const pcy = d.y + d.h * 0.5;
-      const pGrad = ctx.createRadialGradient(pcx - 10, pcy - 8, 6, pcx, pcy, d.w * 0.55);
-      pGrad.addColorStop(0, '#36aab8');
-      pGrad.addColorStop(0.7, '#1b7a8c');
-      pGrad.addColorStop(1, '#11586a');
-      ctx.fillStyle = pGrad;
-      ctx.beginPath();
-      ctx.ellipse(pcx, pcy, d.w * 0.5, d.h * 0.5, 0, 0, TAU);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(218, 246, 240, 0.62)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      const rr = ((t * 14) % 24) + 8;
-      ctx.strokeStyle = `rgba(220, 250, 246, ${(0.35 * (1 - rr / 32)).toFixed(3)})`;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.ellipse(pcx - 8, pcy + 4, rr, rr * 0.6, 0, 0, TAU);
-      ctx.stroke();
-    } else if (d.kind === 'fountain') {
-      ctx.fillStyle = 'rgba(14, 18, 28, 0.28)';
-      ctx.beginPath();
-      ctx.arc(d.x + (sun ? sun.dx * 10 : 3), d.y + (sun ? sun.dy * 10 : 4), d.r + 2, 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = '#e5ddc9';
-      ctx.beginPath();
-      ctx.arc(d.x, d.y, d.r, 0, TAU);
-      ctx.fill();
-      ctx.strokeStyle = '#9c9484';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.fillStyle = '#2597a8';
-      ctx.beginPath();
-      ctx.arc(d.x, d.y, d.r - 5, 0, TAU);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(220, 250, 248, 0.72)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(d.x, d.y, 7 + Math.sin(t * 3.2) * 2, 0, TAU);
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(240, 254, 255, 0.9)';
-      ctx.beginPath();
-      ctx.arc(d.x, d.y, 3.2 + Math.sin(t * 4) * 1.1, 0, TAU);
-      ctx.fill();
-    }
-  }
-
-  // 6. Timber piers with shadows on the teal water, planks & mooring bollards
+  // 6. Timber piers, concrete cargo piers & stone breakwater jetties on the teal water
   for (const p of world.piers) {
     if (!rectsOverlap({ x: p.x - 10, y: p.y - 10, w: p.w + 20, h: p.h + 24 }, view)) continue;
     ctx.fillStyle = 'rgba(4, 18, 28, 0.36)';
     ctx.fillRect(p.x + 5, p.y + 8, p.w, p.h);
-    ctx.fillStyle = PALETTE.pier;
-    ctx.fillRect(p.x, p.y, p.w, p.h);
-    ctx.strokeStyle = 'rgba(72, 48, 28, 0.52)';
-    ctx.lineWidth = 1;
-    for (let x = p.x + 10; x < p.x + p.w; x += 12) {
-      ctx.beginPath();
-      ctx.moveTo(x, p.y + 2);
-      ctx.lineTo(x, p.y + p.h - 2);
-      ctx.stroke();
+    if (p.kind === 'breakwater') {
+      ctx.fillStyle = '#9b9a92';
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.strokeStyle = 'rgba(62, 60, 54, 0.45)';
+      ctx.lineWidth = 1.2;
+      for (let x = p.x + 14; x < p.x + p.w; x += 18) {
+        ctx.beginPath();
+        ctx.moveTo(x, p.y + 2);
+        ctx.lineTo(x, p.y + p.h - 2);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = '#cbc7bc';
+      ctx.lineWidth = 2.4;
+      ctx.strokeRect(p.x + 1.5, p.y + 1.5, p.w - 3, p.h - 3);
+    } else if (p.kind === 'cargo_pier') {
+      ctx.fillStyle = '#8b9096';
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.strokeStyle = 'rgba(42, 46, 52, 0.42)';
+      ctx.lineWidth = 1;
+      for (let x = p.x + 22; x < p.x + p.w; x += 24) {
+        ctx.beginPath();
+        ctx.moveTo(x, p.y + 2);
+        ctx.lineTo(x, p.y + p.h - 2);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = '#e8b632';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(p.x + 3, p.y + 3, p.w - 6, p.h - 6);
+    } else {
+      ctx.fillStyle = PALETTE.pier;
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.strokeStyle = 'rgba(72, 48, 28, 0.52)';
+      ctx.lineWidth = 1;
+      for (let x = p.x + 10; x < p.x + p.w; x += 12) {
+        ctx.beginPath();
+        ctx.moveTo(x, p.y + 2);
+        ctx.lineTo(x, p.y + p.h - 2);
+        ctx.stroke();
+      }
     }
     ctx.fillStyle = '#5c3f24';
     for (let px = p.x + 12; px < p.x + p.w; px += 48) {
@@ -465,8 +441,26 @@ export function createRenderer(canvas) {
       }
     }
     for (const p of world.props) {
-      if (p.x > view.x - 90 && p.x < view.x + view.w + 90 && p.y > view.y - 150 && p.y < view.y + view.h + 90) {
-        drawables.push({ y: p.y, kind: 1, o: p });
+      const pad = p.kind === 'tower_crane' ? 220 : 90;
+      if (p.x > view.x - pad && p.x < view.x + view.w + pad && p.y > view.y - 220 && p.y < view.y + view.h + pad) {
+        drawables.push({ y: p.kind === 'tower_crane' ? p.y + 200 : p.y, kind: 1, o: p });
+      }
+    }
+    if (world.landmarks) {
+      for (const bs of world.landmarks.bandstands) {
+        if (bs.x > view.x - 80 && bs.x < view.x + view.w + 80 && bs.y > view.y - 80 && bs.y < view.y + view.h + 80) {
+          drawables.push({ y: bs.y + bs.r, kind: 5, o: bs });
+        }
+      }
+      for (const st of world.landmarks.stadiums) {
+        if (rectsOverlap({ x: st.x - 160, y: st.y - 160, w: st.w + 320, h: st.h + 320 }, view)) {
+          drawables.push({ y: st.y + st.h, kind: 6, o: st });
+        }
+      }
+      for (const lh of world.landmarks.lighthouses) {
+        if (lh.x > view.x - 160 && lh.x < view.x + view.w + 160 && lh.y > view.y - 160 && lh.y < view.y + view.h + 160) {
+          drawables.push({ y: lh.y + lh.r, kind: 7, o: lh });
+        }
       }
     }
     if (!g.player.inCar) drawables.push({ y: g.player.y + 8, kind: 2, o: g.player });
@@ -492,11 +486,14 @@ export function createRenderer(canvas) {
     drawables.sort((a, b) => a.y - b.y);
     const weapon = g.combat ? g.combat.weapon : 'fist';
     for (const d of drawables) {
-      if (d.kind === 0) drawBuilding(ctx, d.o, cam, night, sun, dusk);
+      if (d.kind === 0) drawBuilding(ctx, d.o, cam, night, sun, dusk, t);
       else if (d.kind === 1) drawProp(ctx, d.o, night, t, sun);
       else if (d.kind === 2) drawPlayer(ctx, d.o, sun, weapon);
       else if (d.kind === 3) drawVehicle(ctx, d.o, night, sun, dusk, t);
       else if (d.kind === 4) drawPed(ctx, d.o, sun, t);
+      else if (d.kind === 5) drawBandstand(ctx, d.o, cam, night, sun);
+      else if (d.kind === 6) drawStadium(ctx, d.o, cam, night, sun);
+      else if (d.kind === 7) drawLighthouse(ctx, d.o, cam, night, dusk, sun, t);
     }
 
     // 4. Overhead traffic signals on corner poles (drawn above vehicles passing underneath)
@@ -521,8 +518,8 @@ export function createRenderer(canvas) {
     drawBulletTracers(ctx, g.bullets, view);
     drawMuzzleFlash(ctx, g.player, g.combat);
 
-    // 7. World lighting pass: twilight multiply + warm sodium lamps + neon light spill & night bloom
-    drawWorldLighting(ctx, world, view, night, dusk, t);
+    // 7. World lighting pass: twilight multiply + warm sodium lamps + neon light spill & lighthouse beam
+    drawWorldLighting(ctx, world, view, night, dusk, t, cam);
 
     ctx.restore();
 

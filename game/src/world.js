@@ -1,23 +1,27 @@
-// Deterministic city generation: the road grid, districts, buildings, harbour, park and props.
+// Deterministic city generation: the road grid, districts, buildings, landmarks,
+// harbour piers, lighthouse, central park, stadium, motel strip, boardwalk and props.
 // One seed lays out the same Blackwater Harbor every time; nothing here runs per frame.
 
 import { CITY, CITY_SEED, PALETTE, PLAYER } from './config.js';
 import { TAU, clamp, int, makeRng, pick, pointInRect, range, circleHitsRect } from './util.js';
 import { populateCityClutter } from './clutter.js';
+import {
+  CONTAINER_COLORS,
+  buildBeachfrontBlock,
+  buildDocksBlock,
+  buildDowntownBlock,
+  buildMotelBlock,
+  buildNorthgateBlock,
+  buildSuburbBlock,
+} from './architecture.js';
+import {
+  buildBoardwalkLandmark,
+  buildConstructionLandmark,
+  buildHarbourLandmarks,
+  buildParkLandmark,
+  buildStadiumLandmark,
+} from './landmarks.js';
 
-const HOUSE_COLORS = ['#e6c7a0', '#d8e0e6', '#e4cedb', '#cde0c6', '#efe0be', '#deb6a4'];
-const TOWER_COLORS = ['#6d9fb3', '#cfc5b4', '#dfd8cb', '#d8a189', '#88a4b5'];
-const HOTEL_COLORS = ['#f0e5d4', '#e6b59c', '#9cd0c8', '#eed4a2'];
-const CONTAINER_COLORS = ['#b5493a', '#247888', '#c99736', '#3366a0', '#5a8748', '#874c8a'];
-
-const TOWER_ROOFS = ['#9b978e', '#868b92', '#a8a196', '#79818a', '#b5ada0'];
-const AWNING_COLORS = [
-  ['#d84a42', '#f4ede0'],
-  ['#1f8f96', '#f2efe6'],
-  ['#e08938', '#f6f0e2'],
-  ['#2b4c7a', '#ebe8df'],
-  ['#c93f7c', '#f4ebf0'],
-];
 const NEON_SPECS = [
   { label: 'HARBOR BAR', rgb: '255, 59, 154', hex: '#ff3b9a', radius: 130 },
   { label: 'PIER 9', rgb: '43, 228, 228', hex: '#2be4e4', radius: 125 },
@@ -41,10 +45,23 @@ export function createWorld(seed = CITY_SEED) {
   const decor = [];
   const grounds = [];
   const waves = [];
+  const gardens = [];
+  const pools = [];
+  const rubbleLots = [];
+  const neonSigns = [];
+
+  const landmarks = {
+    constructionSites: [],
+    parks: [],
+    bandstands: [],
+    stadiums: [],
+    lighthouses: [],
+    boardwalk: null,
+  };
 
   const piers = [
-    { x: CITY.eastX - 12, y: 880, w: 280, h: 44 },
-    { x: CITY.eastX - 12, y: 2560, w: 240, h: 40 },
+    { x: CITY.eastX - 12, y: 880, w: 280, h: 44, kind: 'timber' },
+    { x: CITY.eastX - 12, y: 2560, w: 240, h: 40, kind: 'timber' },
   ];
   const bridges = [
     { x: CITY.basin.x - 60, y: roadsH[4] - CITY.roadHalf - CITY.walk, w: CITY.eastX - CITY.basin.x + 60, h: (CITY.roadHalf + CITY.walk) * 2 },
@@ -66,18 +83,44 @@ export function createWorld(seed = CITY_SEED) {
       || isWater(r.x + r.w / 2, r.y + r.h / 2);
   }
 
-  function addBuilding(r, kind, ht, color, roof) {
-    if (overWater(r)) return;
-    buildings.push({ ...r, kind, ht, color, roof, seed: int(rng, 0, 1e9) });
+  function addBuilding(b) {
+    if (overWater(b)) return;
+    buildings.push(b);
   }
 
+  // Register Harbour Cargo Pier & Breakwater Lighthouse before building blocks so pier props pass overWater()
+  const buildCtx = {
+    rng,
+    addBuilding,
+    props,
+    decor,
+    gardens,
+    pools,
+    rubbleLots,
+    neonSigns,
+    piers,
+    solidsExtra,
+    landmarks,
+  };
+  buildHarbourLandmarks(buildCtx);
+  buildBoardwalkLandmark(buildCtx);
+
   function districtFor(i, j) {
-    if (i === 3 && j === 3) return 'park';
+    if (i === 3 && (j === 3 || j === 4)) return 'park';
     if (i === 9 && j >= 2 && j <= 5) return 'docks';
+    if (i === 7 && j === 3) return 'downtown'; // Blackwater Arena landmark
     if (i >= 4 && i <= 6 && j >= 2 && j <= 4) return 'downtown';
     if (j === 6) return 'beachfront';
     if (j === 0) return 'northgate';
     return 'suburbs';
+  }
+
+  function landmarkFor(i, j) {
+    if (i === 3 && (j === 3 || j === 4)) return 'park';
+    if (i === 5 && j === 3) return 'construction';
+    if (i === 7 && j === 3) return 'stadium';
+    if ((i === 1 || i === 2) && j === 6) return 'motel';
+    return null;
   }
 
   const blockEdge = CITY.roadHalf + CITY.walk;
@@ -88,74 +131,35 @@ export function createWorld(seed = CITY_SEED) {
       const x = roadsV[i] + blockEdge;
       const y = roadsH[j] + blockEdge;
       const district = districtFor(i, j);
-      blocks.push({ x, y, w: blockSize, h: blockSize, district, i, j });
+      const landmark = landmarkFor(i, j);
+      const blk = { x, y, w: blockSize, h: blockSize, district, landmark, i, j };
+      blocks.push(blk);
+
       const groundColor = district === 'park' ? PALETTE.park
         : district === 'downtown' ? PALETTE.concrete
         : district === 'docks' ? PALETTE.dock
-        : district === 'beachfront' ? '#cfc3a4'
+        : district === 'beachfront' ? '#d8ccb0'
         : '#8eaa6b';
-      grounds.push({ x, y, w: blockSize, h: blockSize, color: groundColor, district });
+      grounds.push({ x, y, w: blockSize, h: blockSize, color: groundColor, district, landmark });
 
-      if (district === 'downtown') {
-        for (let lot = 0; lot < 2; lot += 1) {
-          const w = range(rng, 104, 142);
-          const h = range(rng, 112, 164);
-          const bx = x + lot * 166 + range(rng, 8, Math.max(9, 160 - w));
-          const by = y + range(rng, 10, Math.max(11, 320 - h));
-          const ht = range(rng, 120, 262);
-          addBuilding({ x: bx, y: by, w, h }, 'tower', ht, pick(rng, TOWER_COLORS), '#a8a296');
-        }
-      } else if (district === 'suburbs') {
-        for (let cx = 0; cx < 2; cx += 1) {
-          for (let cy = 0; cy < 3; cy += 1) {
-            const w = range(rng, 74, 104);
-            const h = range(rng, 56, 80);
-            const bx = x + cx * 166 + range(rng, 12, Math.max(13, 150 - w));
-            const by = y + cy * 110 + range(rng, 10, Math.max(11, 100 - h));
-            addBuilding({ x: bx, y: by, w, h }, 'house', range(rng, 22, 38), pick(rng, HOUSE_COLORS), rng() < 0.6 ? '#b86240' : '#7b8089');
-          }
-        }
-        props.push({ kind: rng() < 0.35 ? 'palm' : 'tree', x: x + range(rng, 10, 320), y: y + range(rng, 10, 320), ph: range(rng, 0, TAU), s: range(rng, 0.85, 1.2) });
-        props.push({ kind: 'hydrant', x: x - 8, y: y + 40 });
-      } else if (district === 'northgate') {
-        for (let lot = 0; lot < 2; lot += 1) {
-          const w = range(rng, 130, 170);
-          const h = range(rng, 90, 120);
-          addBuilding({ x: x + lot * 166 + 8, y: y + range(rng, 30, 180), w, h }, 'flat', range(rng, 48, 74), pick(rng, HOUSE_COLORS), '#958e83');
-        }
-      } else if (district === 'beachfront') {
-        for (let lot = 0; lot < 2; lot += 1) {
-          const w = range(rng, 150, 208);
-          const h = range(rng, 84, 104);
-          addBuilding({ x: x + lot * 166 + range(rng, 4, Math.max(5, 160 - w)), y: y + range(rng, 16, 60), w, h }, 'hotel', range(rng, 56, 112), pick(rng, HOTEL_COLORS), '#e3dac8');
-        }
-        for (let p = 0; p < 3; p += 1) {
-          props.push({ kind: 'palm', x: x + 30 + p * 110, y: y + blockSize + 22, ph: range(rng, 0, TAU), s: range(rng, 0.9, 1.25) });
-        }
+      if (landmark === 'construction') {
+        buildConstructionLandmark(blk, buildCtx);
+      } else if (landmark === 'park') {
+        buildParkLandmark(blk, buildCtx);
+      } else if (landmark === 'stadium') {
+        buildStadiumLandmark(blk, buildCtx);
+      } else if (landmark === 'motel') {
+        buildMotelBlock(blk, buildCtx);
+      } else if (district === 'downtown') {
+        buildDowntownBlock(blk, buildCtx);
       } else if (district === 'docks') {
-        addBuilding({ x: x + 14, y: y + 12, w: 252, h: 122 }, 'warehouse', 42, '#919ba4', '#6d7782');
-        for (let row = 0; row < 3; row += 1) {
-          for (let col = 0; col < 4; col += 1) {
-            if (rng() < 0.22) continue;
-            addBuilding({ x: x + 12 + col * 66, y: y + 156 + row * 40, w: 58, h: 24 }, 'container', 26, pick(rng, CONTAINER_COLORS), '#000000');
-          }
-        }
-      } else if (district === 'park') {
-        const pond = { x: x + 178, y: y + 158, w: 118, h: 84 };
-        decor.push({ kind: 'pond', ...pond });
-        solidsExtra.push(pond);
-        decor.push({ kind: 'path', x: x + 150, y, w: 26, h: blockSize });
-        decor.push({ kind: 'path', x, y: y + 150, w: blockSize, h: 26 });
-        decor.push({ kind: 'fountain', x: x + 84, y: y + 84, r: 20 });
-        for (let t = 0; t < 13; t += 1) {
-          const tx = x + range(rng, 16, 316);
-          const ty = y + range(rng, 16, 316);
-          if (pointInRect(tx, ty, { x: pond.x - 16, y: pond.y - 16, w: pond.w + 32, h: pond.h + 32 })) continue;
-          props.push({ kind: rng() < 0.3 ? 'palm' : 'tree', x: tx, y: ty, ph: range(rng, 0, TAU), s: range(rng, 0.9, 1.35) });
-        }
-        props.push({ kind: 'bench', x: x + 120, y: y + 140 });
-        props.push({ kind: 'bench', x: x + 210, y: y + 128 });
-        props.push({ kind: 'bench', x: x + 140, y: y + 210 });
+        buildDocksBlock(blk, buildCtx);
+      } else if (district === 'beachfront') {
+        buildBeachfrontBlock(blk, buildCtx);
+      } else if (district === 'northgate') {
+        buildNorthgateBlock(blk, buildCtx);
+      } else {
+        buildSuburbBlock(blk, buildCtx);
       }
     }
   }
@@ -165,7 +169,18 @@ export function createWorld(seed = CITY_SEED) {
   props.push({ kind: 'crane', x: 4552, y: 1180, ph: 0 });
   props.push({ kind: 'crane', x: 4552, y: 2380, ph: 1.7 });
   for (let c = 0; c < 8; c += 1) {
-    addBuilding({ x: 4500 + (c % 2) * 64, y: 700 + Math.floor(c / 2) * 46, w: 58, h: 24 }, 'container', 26, pick(rng, CONTAINER_COLORS), '#000000');
+    addBuilding({
+      x: 4500 + (c % 2) * 64,
+      y: 700 + Math.floor(c / 2) * 46,
+      w: 58,
+      h: 24,
+      kind: 'container',
+      ht: c % 3 === 0 ? 44 : 26,
+      material: 'corrugated',
+      color: pick(rng, CONTAINER_COLORS),
+      roof: '#000000',
+      seed: int(rng, 0, 1e9),
+    });
   }
 
   // Street lights along every road, staggered side to side, skipped at intersections.
@@ -194,12 +209,12 @@ export function createWorld(seed = CITY_SEED) {
     }
   }
 
-  // Palms: the coastal highway avenue, the beach, and the park edges.
+  // Palms: the coastal highway avenue and the beach strip.
   for (let x = 100; x < 4560; x += 88) {
     props.push({ kind: 'palm', x: x + range(rng, -8, 8), y: roadsH[7] + CITY.roadHalf + 26, ph: range(rng, 0, TAU), s: range(rng, 0.9, 1.3) });
   }
   for (let p = 0; p < 26; p += 1) {
-    props.push({ kind: 'palm', x: range(rng, 120, 4480), y: range(rng, CITY.beachY + 28, CITY.seaY - 26), ph: range(rng, 0, TAU), s: range(rng, 0.85, 1.3) });
+    props.push({ kind: 'palm', x: range(rng, 120, 4480), y: range(rng, CITY.beachY + 46, CITY.seaY - 26), ph: range(rng, 0, TAU), s: range(rng, 0.85, 1.3) });
   }
 
   // Wave glints, pre-scattered so the sea animates without per-frame randomness.
@@ -220,25 +235,8 @@ export function createWorld(seed = CITY_SEED) {
     waves.push({ x, y, ph: range(rng, 0, TAU), len: range(rng, 14, 36) });
   }
 
-  // ── Visual polish layer (separate RNG so city geometry stays 100% deterministic) ──
+  // ── Visual polish layer (separate RNG for manholes, patches, minor lots & neon signs) ──
   const visRng = makeRng(seed ^ 0x5f3759df);
-
-  // Enrich buildings with varied roof tones, storefront awnings & rooftop details
-  for (const b of buildings) {
-    if (b.kind === 'tower' || b.kind === 'flat') {
-      b.roof = pick(visRng, TOWER_ROOFS);
-      b.hasWaterTank = b.ht > 100 && visRng() < 0.48;
-      b.hasSkylight = !b.hasWaterTank && b.ht <= 210 && visRng() < 0.35;
-      b.awning = visRng() < 0.65 ? pick(visRng, AWNING_COLORS) : null;
-      b.awningSide = visRng() < 0.5 ? 'south' : 'west';
-    } else if (b.kind === 'hotel') {
-      b.awning = pick(visRng, AWNING_COLORS);
-      b.awningSide = 'south';
-      b.hasSkylight = visRng() < 0.5;
-    } else if (b.kind === 'warehouse') {
-      b.hasVents = true;
-    }
-  }
 
   // Manhole covers & weathered asphalt repair patches along roads
   const manholes = [];
@@ -280,17 +278,14 @@ export function createWorld(seed = CITY_SEED) {
     }
   }
 
-  // Construction lots with hazard fencing in open corners of selected blocks
+  // Secondary fenced construction lots in open non-landmark corners
   const constructionLots = [];
   for (const blk of blocks) {
-    if (blk.district !== 'downtown' && blk.district !== 'suburbs') continue;
-    if ((blk.i + blk.j) % 4 !== 0) continue;
-    // Try placing a fenced construction lot in a corner that doesn't overlap any building
+    if (blk.landmark || (blk.district !== 'downtown' && blk.district !== 'suburbs')) continue;
+    if ((blk.i + blk.j) % 5 !== 0) continue;
     const candidates = [
       { x: blk.x + 12, y: blk.y + blk.h - 92, w: 96, h: 78 },
       { x: blk.x + blk.w - 108, y: blk.y + 12, w: 96, h: 78 },
-      { x: blk.x + 12, y: blk.y + 12, w: 92, h: 74 },
-      { x: blk.x + blk.w - 104, y: blk.y + blk.h - 88, w: 92, h: 74 },
     ];
     for (const c of candidates) {
       const overlaps = buildings.some((b) =>
@@ -304,7 +299,6 @@ export function createWorld(seed = CITY_SEED) {
   }
 
   // Neon signs near the docks, quay warehouses, and Midtown street corners
-  const neonSigns = [];
   let neonIdx = 0;
   for (const b of buildings) {
     if (b.kind === 'warehouse') {
@@ -320,7 +314,6 @@ export function createWorld(seed = CITY_SEED) {
         flicker: neonIdx % 3 === 0,
         ph: range(visRng, 0, TAU),
       });
-      // Second accent neon on the east dockside wall
       const spec2 = NEON_SPECS[(neonIdx + 1) % NEON_SPECS.length];
       neonSigns.push({
         x: b.x + b.w + 2,
@@ -332,7 +325,7 @@ export function createWorld(seed = CITY_SEED) {
         flicker: false,
         ph: range(visRng, 0, TAU),
       });
-    } else if ((b.kind === 'tower' || b.kind === 'hotel') && visRng() < 0.34) {
+    } else if ((b.kind === 'tower' || b.kind === 'hotel' || b.kind === 'shop') && visRng() < 0.28) {
       const spec = NEON_SPECS[neonIdx % NEON_SPECS.length];
       neonIdx += 1;
       neonSigns.push({
@@ -347,7 +340,6 @@ export function createWorld(seed = CITY_SEED) {
       });
     }
   }
-  // Extra vibrant dockside quay neon markers right near the cranes & mission docks
   neonSigns.push(
     { x: 4496, y: 1126, w: 12, h: 56, orient: 'v', label: 'DOCK 4', rgb: '255, 59, 154', hex: '#ff3b9a', radius: 145, flicker: false, ph: 0.4 },
     { x: 4496, y: 1244, w: 12, h: 56, orient: 'v', label: 'HARBOR', rgb: '43, 228, 228', hex: '#2be4e4', radius: 145, flicker: true, ph: 1.9 },
@@ -371,7 +363,7 @@ export function createWorld(seed = CITY_SEED) {
     if (y > CITY.beachY) return 'Coral Beach';
     if (x > 4484) return 'Dockside';
     if (pointInRect(x, y, { x: CITY.basin.x - 40, y: CITY.basin.y - 40, w: CITY.basin.w + 80, h: CITY.basin.h + 80 })) return 'The Basin';
-    if (x > roadsV[3] && x < roadsV[4] && y > roadsH[3] && y < roadsH[4]) return 'Palmetto Park';
+    if (x > roadsV[3] && x < roadsV[4] && y > roadsH[3] && y < roadsH[5]) return 'Palmetto Park';
     if (x > roadsV[4] - 44 && x < roadsV[7] + 44 && y > roadsH[2] - 44 && y < roadsH[5] + 44) return 'Midtown';
     if (y > roadsH[6] - 44) return 'Beachfront';
     if (y < roadsH[1]) return 'Northgate';
@@ -437,6 +429,10 @@ export function createWorld(seed = CITY_SEED) {
     constructionLots,
     neonSigns,
     districtLabels,
+    gardens,
+    pools,
+    rubbleLots,
+    landmarks,
     spawn: { ...PLAYER.spawn },
     isWater,
     districtAt,

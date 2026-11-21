@@ -4,6 +4,7 @@
 import { PALETTE } from './config.js';
 import { TAU, hash01 } from './util.js';
 import { drawSoftDropShadow } from './lighting.js';
+import { drawTowerCrane } from './landmarks.js';
 
 /** Draw yard fences, park iron railings, dock chain-link fences and hedges. */
 export function drawFence(ctx, f, sun) {
@@ -94,6 +95,10 @@ export function drawFence(ctx, f, sun) {
 
 /** Draw one prop: palms with trunk rings & canopy shadows, streetlamps, bus stops, etc. */
 export function drawProp(ctx, p, night, t, sun) {
+  if (p.kind === 'tower_crane') {
+    drawTowerCrane(ctx, p, night, t, sun);
+    return;
+  }
   const sdx = sun ? sun.dx * 36 : 8;
   const sdy = sun ? sun.dy * 36 : 6;
   const shA = sun ? sun.alpha : 0.24;
