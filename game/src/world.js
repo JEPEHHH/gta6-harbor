@@ -3,6 +3,7 @@
 
 import { CITY, CITY_SEED, PALETTE, PLAYER } from './config.js';
 import { TAU, clamp, int, makeRng, pick, pointInRect, range, circleHitsRect } from './util.js';
+import { populateCityClutter } from './clutter.js';
 
 const HOUSE_COLORS = ['#e6c7a0', '#d8e0e6', '#e4cedb', '#cde0c6', '#efe0be', '#deb6a4'];
 const TOWER_COLORS = ['#6d9fb3', '#cfc5b4', '#dfd8cb', '#d8a189', '#88a4b5'];
@@ -417,7 +418,7 @@ export function createWorld(seed = CITY_SEED) {
     return 'grass';
   }
 
-  return {
+  const world = {
     w: CITY.width,
     h: CITY.height,
     roadsV,
@@ -443,4 +444,6 @@ export function createWorld(seed = CITY_SEED) {
     nearestRoad,
     surfaceAt,
   };
+  populateCityClutter(world, seed);
+  return world;
 }

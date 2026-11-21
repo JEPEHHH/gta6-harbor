@@ -168,54 +168,61 @@ function drawMinimap(ctx, g) {
     ctx.fillText(dl.name, lx, ly);
   }
 
-  // Traffic dots
+  // Traffic dots (clean high-contrast warm pips)
   for (const v of (g.traffic || [])) {
     const vx = mx(v.x);
     const vy = my(v.y);
     if (vx < MM.x || vx > MM.x + MM.w || vy < MM.y || vy > MM.y + MM.h) continue;
-    ctx.fillStyle = 'rgba(210, 218, 226, 0.42)';
+    ctx.fillStyle = 'rgba(232, 238, 244, 0.62)';
     ctx.beginPath();
-    ctx.arc(vx, vy, 1.4, 0, TAU);
+    ctx.arc(vx, vy, v.type === 'bus' ? 2.1 : 1.6, 0, TAU);
     ctx.fill();
   }
 
-  // Police blips with pulsing red/blue ring
+  // Police blips with crisp white outline & pulsing red/blue beacon
   const policeFlash = Math.sin(g.elapsed * 12) > 0;
   for (const blip of g.blips) {
-    const bx = mx(blip.x);
-    const by = my(blip.y);
-    if (bx < MM.x - 6 || bx > MM.x + MM.w + 6 || by < MM.y - 6 || by > MM.y + MM.h + 6) continue;
+    const bx = clamp(mx(blip.x), MM.x + 8, MM.x + MM.w - 8);
+    const by = clamp(my(blip.y), MM.y + 8, MM.y + MM.h - 8);
     if (blip.color === '#5080e0') {
-      ctx.fillStyle = policeFlash ? 'rgba(245, 62, 62, 0.38)' : 'rgba(66, 134, 255, 0.38)';
+      ctx.fillStyle = policeFlash ? 'rgba(255, 62, 62, 0.44)' : 'rgba(66, 144, 255, 0.44)';
       ctx.beginPath();
-      ctx.arc(bx, by, 6.2, 0, TAU);
+      ctx.arc(bx, by, 7.4, 0, TAU);
       ctx.fill();
-      ctx.fillStyle = policeFlash ? '#ff4a4a' : '#4a8cff';
+      ctx.fillStyle = policeFlash ? '#ff3c3c' : '#3d8bff';
       ctx.beginPath();
-      ctx.arc(bx, by, 3.2, 0, TAU);
+      ctx.arc(bx, by, 4.0, 0, TAU);
       ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
     }
   }
 
-  // Mission waypoint pulsing diamond (clamped to radar edge if off-map)
+  // Mission waypoint pulsing diamond with outer target halo (clamped to radar edge if off-map)
   if (g.mission && g.mission.waypoint) {
     const wp = g.mission.waypoint;
-    const wx = clamp(mx(wp.x), MM.x + 9, MM.x + MM.w - 9);
-    const wy = clamp(my(wp.y), MM.y + 9, MM.y + MM.h - 9);
+    const wx = clamp(mx(wp.x), MM.x + 10, MM.x + MM.w - 10);
+    const wy = clamp(my(wp.y), MM.y + 10, MM.y + MM.h - 10);
     const pulse = 1 + Math.sin(g.elapsed * 5) * 0.16;
     ctx.save();
     ctx.translate(wx, wy);
+    ctx.strokeStyle = 'rgba(255, 174, 82, 0.65)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, 8.8 * pulse, 0, TAU);
+    ctx.stroke();
     ctx.scale(pulse, pulse);
     ctx.fillStyle = PALETTE.accent;
     ctx.beginPath();
-    ctx.moveTo(0, -6.5);
-    ctx.lineTo(5.5, 0);
-    ctx.lineTo(0, 6.5);
-    ctx.lineTo(-5.5, 0);
+    ctx.moveTo(0, -7.2);
+    ctx.lineTo(6.2, 0);
+    ctx.lineTo(0, 7.2);
+    ctx.lineTo(-6.2, 0);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.3;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.restore();
   }
@@ -401,6 +408,56 @@ function drawDialogue(ctx, g) {
   ctx.restore();
 }
 
+const DISTRICT_SUBTITLES = {
+  'Midtown': 'FINANCIAL & COMMERCIAL CORE',
+  'Palmetto Park': 'BOTANICAL COMMONS',
+  'The Palms': 'RESIDENTIAL QUARTER',
+  'Dockside': 'HARBOR CARGO TERMINALS',
+  'The Basin': 'MARITIME INLET',
+  'Beachfront': 'OCEAN PROMENADE',
+  'Coral Beach': 'SOUTH SHORE',
+  'Northgate': 'UPTOWN FLATS',
+};
+
+/** Small sleek district banner that fades smoothly in and out on district transitions. */
+function drawDistrictBanner(ctx, g) {
+  const b = g.districtBanner;
+  if (!b || !b.name) return;
+  const fadeIn = clamp(b.age / 0.35, 0, 1);
+  const fadeOut = clamp((b.life - b.age) / 0.75, 0, 1);
+  const alpha = Math.min(fadeIn, fadeOut);
+  if (alpha <= 0.01) return;
+
+  const title = b.name.toUpperCase();
+  const sub = DISTRICT_SUBTITLES[b.name] || 'BLACKWATER HARBOR';
+  const bx = 1256;
+  const by = g.player.inCar ? 518 : 604;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = 'right';
+  ctx.font = `800 18px ${FONT}`;
+  const tw = ctx.measureText(title).width;
+  ctx.font = `700 9px ${FONT}`;
+  const sw = ctx.measureText(sub).width;
+  const pw = Math.max(tw, sw) + 32;
+
+  panel(ctx, bx - pw, by - 42, pw, 44, 10);
+  // Right-edge teal accent strip
+  ctx.fillStyle = PALETTE.teal;
+  ctx.beginPath();
+  ctx.roundRect(bx - 4, by - 36, 3, 32, 1.5);
+  ctx.fill();
+
+  ctx.fillStyle = PALETTE.hud;
+  ctx.font = `800 18px ${FONT}`;
+  ctx.fillText(title, bx - 14, by - 20);
+  ctx.fillStyle = PALETTE.teal;
+  ctx.font = `700 9px ${FONT}`;
+  ctx.fillText(sub, bx - 14, by - 7);
+  ctx.restore();
+}
+
 export function drawHUD(ctx, g) {
   const p = g.player;
   ctx.textBaseline = 'alphabetic';
@@ -539,6 +596,7 @@ export function drawHUD(ctx, g) {
     drawWeaponHUD(ctx, g.combat, 1244, 650, FONT);
   }
 
+  drawDistrictBanner(ctx, g);
   drawDialogue(ctx, g);
 
   // Subtle bottom-right key legend

@@ -123,36 +123,91 @@ export function laneOffset(dx, dy, lane = 1) {
   return { ox: nx * CITY.roadHalf * 0.5 * lane, oy: ny * CITY.roadHalf * 0.5 * lane };
 }
 
-/** Draw overhead traffic signal housings with glowing red/amber/green lenses. */
-export function drawLights(ctx, graph, view, night = 0) {
+/** Draw traffic lights mounted on corner poles with overhanging mast arms & signal heads. */
+export function drawLights(ctx, graph, view, night = 0, sun = null) {
+  const sdx = sun ? sun.dx * 22 : 5;
+  const sdy = sun ? sun.dy * 22 : 4;
+  const shA = sun ? sun.alpha * 0.85 : 0.20;
+
   for (const l of graph.lights) {
-    if (l.x < view.x - 40 || l.x > view.x + view.w + 40 ||
-        l.y < view.y - 40 || l.y > view.y + view.h + 40) continue;
-    const r = CITY.roadHalf + 5;
-    const nsColor = l.phase === 0 ? '#3ee06a' : l.phase === 1 ? '#f2cf44' : '#eb3f3f';
-    const ewColor = l.phase === 2 ? '#3ee06a' : l.phase === 3 ? '#f2cf44' : '#eb3f3f';
-    const pts = [
-      [l.x + r, l.y - r, nsColor],
-      [l.x - r, l.y + r, nsColor],
-      [l.x + r, l.y + r, ewColor],
-      [l.x - r, l.y - r, ewColor],
+    if (l.x < view.x - 56 || l.x > view.x + view.w + 56 ||
+        l.y < view.y - 56 || l.y > view.y + view.h + 56) continue;
+    const r = CITY.roadHalf + 6;
+    // Active light states (0=green, 1=yellow, 2=red)
+    const nsIdx = l.phase === 0 ? 0 : l.phase === 1 ? 1 : 2;
+    const ewIdx = l.phase === 2 ? 0 : l.phase === 3 ? 1 : 2;
+    const cols = ['#3ee06a', '#f2cf44', '#eb3f3f'];
+    const nsCol = cols[nsIdx];
+    const ewCol = cols[ewIdx];
+
+    // Four corner poles with mast arms cantilevered slightly over each approaching lane
+    const corners = [
+      { px: l.x + r, py: l.y - r, ax: -14, ay: 0, col: nsCol, idx: nsIdx, horiz: true },
+      { px: l.x - r, py: l.y + r, ax: 14, ay: 0, col: nsCol, idx: nsIdx, horiz: true },
+      { px: l.x + r, py: l.y + r, ax: 0, ay: -14, col: ewCol, idx: ewIdx, horiz: false },
+      { px: l.x - r, py: l.y - r, ax: 0, ay: 14, col: ewCol, idx: ewIdx, horiz: false },
     ];
-    for (const [px, py, col] of pts) {
-      ctx.fillStyle = '#20242c';
+
+    for (const c of corners) {
+      const hx = c.px + c.ax;
+      const hy = c.py + c.ay;
+
+      // Pole & cantilevered arm shadow on pavement
+      ctx.strokeStyle = `rgba(14, 20, 36, ${shA.toFixed(3)})`;
+      ctx.lineWidth = 2.0;
       ctx.beginPath();
-      ctx.arc(px, py, 5.2, 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = col;
+      ctx.moveTo(c.px, c.py);
+      ctx.lineTo(c.px + sdx, c.py + sdy);
+      ctx.lineTo(c.px + sdx + c.ax * 0.85, c.py + sdy + c.ay * 0.85);
+      ctx.stroke();
+
+      // Corner pole base + steel mast
+      ctx.fillStyle = '#2d333c';
       ctx.beginPath();
-      ctx.arc(px, py, 3.2, 0, TAU);
+      ctx.arc(c.px, c.py, 3.0, 0, TAU);
       ctx.fill();
-      if (night > 0.15) {
+      ctx.strokeStyle = '#4c5664';
+      ctx.lineWidth = 2.1;
+      ctx.beginPath();
+      ctx.moveTo(c.px, c.py);
+      ctx.lineTo(hx, hy);
+      ctx.stroke();
+
+      // Yellow-black 3-lens signal head housing on the arm
+      ctx.save();
+      ctx.translate(hx, hy);
+      if (!c.horiz) ctx.rotate(Math.PI * 0.5);
+      ctx.fillStyle = '#1b1f26';
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -3.2, 13, 6.4, 1.8);
+      ctx.fill();
+      ctx.strokeStyle = '#d4a632';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Three lenses (red, amber, green) — active one bright, inactive dim
+      const lxPos = [-3.6, 0, 3.6];
+      const lCols = ['#eb3f3f', '#f2cf44', '#3ee06a'];
+      const activeSlot = c.idx === 2 ? 0 : c.idx === 1 ? 1 : 2;
+      for (let k = 0; k < 3; k += 1) {
+        ctx.fillStyle = k === activeSlot ? lCols[k] : 'rgba(60, 68, 78, 0.55)';
+        ctx.beginPath();
+        ctx.arc(lxPos[k], 0, k === activeSlot ? 1.8 : 1.2, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Mild highlight bloom ONLY at dusk/night
+      if (night > 0.18) {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = col;
-        ctx.globalAlpha = 0.25 * night;
+        const g = ctx.createRadialGradient(hx, hy, 1, hx, hy, 13);
+        g.addColorStop(0, c.col);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalAlpha = 0.32 * night;
+        ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.arc(px, py, 10, 0, TAU);
+        ctx.arc(hx, hy, 13, 0, TAU);
         ctx.fill();
         ctx.restore();
       }

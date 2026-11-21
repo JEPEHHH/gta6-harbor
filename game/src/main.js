@@ -43,7 +43,7 @@ const roadGraph = buildRoadGraph(world);
 const rng = createRandom(42);
 
 // Parked cars stay across sessions; traffic and peds are dynamic.
-const parkedCars = spawnParkedCars(world, rng, 40);
+const parkedCars = spawnParkedCars(world, rng, 115);
 const combat = createCombatState();
 const wantedState = createWantedState();
 const policeState = createPoliceState();
@@ -59,6 +59,7 @@ const game = {
   elapsed: 0,
   wanted: 0,
   district: world.districtAt(world.spawn.x, world.spawn.y),
+  districtBanner: null,
   objective: '',
   particles: [],
   notifications: [],
@@ -141,12 +142,14 @@ function newGame() {
   updateMissionBlips();
 
   // Spawn initial traffic and peds
-  game.traffic = spawnTraffic(world, roadGraph, rng, 14);
+  game.traffic = spawnTraffic(world, roadGraph, rng, 26);
   game.peds = [];
-  const newPeds = spawnPeds(world, player, rng, game.peds, 20);
+  const newPeds = spawnPeds(world, player, rng, game.peds, 48);
   game.peds.push(...newPeds);
 
   camera.snap(player.x, player.y);
+  game.district = world.districtAt(player.x, player.y);
+  game.districtBanner = { name: game.district, age: 0, life: 3.8 };
   notify('Welcome to Blackwater Harbor');
   announce('Playing. On foot in Blackwater Harbor.');
   resumeAudio();
@@ -342,7 +345,7 @@ function step(dt) {
   // ── Traffic AI ──────────────────────────────────────────────
   updateTrafficAI(game.traffic, dt, world, roadGraph, player, allVehicles, game.particles, rng);
   cullTraffic(game.traffic, player);
-  refillTraffic(game.traffic, world, roadGraph, player, rng, 14);
+  refillTraffic(game.traffic, world, roadGraph, player, rng, 26);
 
   // ── Vehicle-to-vehicle collisions (all pairs that matter) ───
   for (let i = 0; i < allVehicles.length; i += 1) {
@@ -354,7 +357,7 @@ function step(dt) {
   // ── Pedestrians ─────────────────────────────────────────────
   updatePeds(game.peds, dt, world, player, allVehicles, game.particles, rng);
   cullPeds(game.peds, player);
-  const newPeds = spawnPeds(world, player, rng, game.peds, 20);
+  const newPeds = spawnPeds(world, player, rng, game.peds, 48);
   game.peds.push(...newPeds);
 
   // ── Wanted system ───────────────────────────────────────────
@@ -457,7 +460,11 @@ function step(dt) {
   const district = world.districtAt(player.x, player.y);
   if (district !== game.district) {
     game.district = district;
-    notify(district, 2.5);
+    game.districtBanner = { name: district, age: 0, life: 3.8 };
+  }
+  if (game.districtBanner) {
+    game.districtBanner.age += dt;
+    if (game.districtBanner.age >= game.districtBanner.life) game.districtBanner = null;
   }
   for (let i = game.notifications.length - 1; i >= 0; i -= 1) {
     game.notifications[i].age += dt;
@@ -526,7 +533,7 @@ window.__harbor = {
     if (name === 'foot') {
       player.inCar = null;
       if (engineRunning) { stopEngine(); engineRunning = false; }
-      this.setTime(15.2);
+      this.setTime(8 + 10 / 60); // 08:10 morning with long shadows
       this.setWanted(0);
       resetPolice(policeState);
       game.skidmarks.length = 0;
@@ -535,7 +542,7 @@ window.__harbor = {
       game.notifications.length = 0;
       game.dialogue = null;
       game.rain = false;
-      this.teleport(1842, 1534);
+      this.teleport(1848, 1538);
       player.angle = -Math.PI * 0.14;
       player.moving = true;
       player.walkPhase = 1.1;
@@ -543,23 +550,98 @@ window.__harbor = {
       player.armour = 75;
       combat.weapon = 'smg';
       game.district = world.districtAt(player.x, player.y);
-      game.objective = 'Explore Blackwater Harbor — find a ride';
-      game.peds = spawnPeds(world, player, rng, [], 25);
-      game.peds.push({ id: 9981, x: player.x - 44, y: player.y + 4, vx: 38, vy: 0, angle: 0, speed: 45, walkPhase: 0.7, state: 'walk', stateTimer: 5, targetX: player.x + 140, targetY: player.y + 4, health: 40, alive: true, shirt: '#2ca8ad', hair: '#18181c', skin: '#d69c72', fleeTimer: 0 });
-      game.peds.push({ id: 9982, x: player.x + 62, y: player.y + 2, vx: -34, vy: 0, angle: Math.PI, speed: 50, walkPhase: 2.1, state: 'walk', stateTimer: 5, targetX: player.x - 150, targetY: player.y + 2, health: 40, alive: true, shirt: '#c76d3b', hair: '#5a3a1a', skin: '#b2764f', fleeTimer: 0 });
-      game.peds.push({ id: 9983, x: player.x - 110, y: player.y + 52, vx: 22, vy: 12, angle: 0.4, speed: 44, walkPhase: 1.5, state: 'walk', stateTimer: 5, targetX: player.x - 20, targetY: player.y + 80, health: 40, alive: true, shirt: '#cc568b', hair: '#8c6b47', skin: '#e6b892', fleeTimer: 0 });
-      game.traffic = spawnTraffic(world, roadGraph, rng, 14);
-      const streetTaxi = createVehicle(player.x + 115, 1510, 0, 'taxi');
-      streetTaxi.driver = 'traffic'; streetTaxi.vx = 85;
-      game.traffic.push(streetTaxi);
-      const streetSedan = createVehicle(player.x - 150, 1488, Math.PI, 'sedan');
-      streetSedan.driver = 'traffic'; streetSedan.vx = -80;
-      game.traffic.push(streetSedan);
-      camera.snap(player.x - 40, player.y + 20);
+      game.districtBanner = { name: 'Palmetto Park', age: 1.1, life: 4.0 };
+      game.objective = 'Drive to the docks — meet Marcus';
+      game.mission = { waypoint: { x: 4500, y: 1180 } };
+
+      // Set nearby intersection light (1920, 1500) to NS green / EW red so east-west cars queue
+      for (const l of roadGraph.lights) {
+        if (Math.abs(l.x - 1920) < 30 && Math.abs(l.y - 1500) < 30) {
+          l.phase = 0;
+          l.timer = 1.0;
+        }
+      }
+
+      // Clear any previous staged vehicles or parked cars colliding with the staged intersection
+      for (let i = parkedCars.length - 1; i >= 0; i -= 1) {
+        const pc = parkedCars[i];
+        if (pc._staged || (Math.abs(pc.y - 1500) < 34 && pc.x > 1650 && pc.x < 2130)) {
+          parkedCars.splice(i, 1);
+        }
+      }
+      // Place clean kerbside parked cars along BOTH curbs on the avenue
+      const addCurbCar = (x, y, angle, type, color) => {
+        const c = createVehicle(x, y, angle, type);
+        c.color = color;
+        c._staged = true;
+        parkedCars.push(c);
+      };
+      addCurbCar(1622, 1478, Math.PI, 'sedan', '#3b82b0');
+      addCurbCar(1674, 1522, 0, 'suv', '#2d3b4c');
+      addCurbCar(2128, 1478, Math.PI, 'van', '#e2e7ec');
+      addCurbCar(2168, 1522, 0, 'pickup', '#d8823c');
+      addCurbCar(2230, 1478, Math.PI, 'sedan', '#688c5c');
+
+      // Rich busy sidewalk life: walkers, jogger, dog walker, small chatting groups, crossing waiters
+      game.peds = spawnPeds(world, player, rng, [], 44);
+      const makePed = (id, role, x, y, vx, vy, angle, walkPhase, shirt, hair, skin, extra = {}) => ({
+        id, role, x, y, vx, vy, angle, speed: Math.hypot(vx, vy) || 50, walkPhase,
+        state: Math.hypot(vx, vy) > 2 ? 'walk' : 'idle', stateTimer: 8,
+        targetX: x + vx * 4, targetY: y + vy * 4, health: 40, alive: true,
+        shirt, pants: '#2c3442', hair, skin, hat: null, bag: null, dogColor: null, fleeTimer: 0, ...extra,
+      });
+      game.peds.push(
+        // Walkers along north & south Midtown/Palmetto sidewalks
+        makePed(9901, 'walker', 1776, 1538, 46, 0, 0, 0.9, '#2ca8ad', '#18181c', '#d69c72', { bag: 'tote' }),
+        makePed(9902, 'walker', 1998, 1538, -42, 0, Math.PI, 2.2, '#c76d3b', '#5a3a1a', '#b2764f', { bag: 'backpack' }),
+        makePed(9903, 'walker', 2124, 1538, -44, 0, Math.PI, 0.5, '#6d44b8', '#8c6b47', '#e6b892', { hat: '#e08938' }),
+        makePed(9904, 'walker', 1742, 1462, 48, 0, 0, 1.8, '#d4aa3d', '#26303b', '#c38458'),
+        makePed(9905, 'walker', 2016, 1462, -45, 0, Math.PI, 1.3, '#4f7ec9', '#40261b', '#d69c72', { bag: 'tote' }),
+        makePed(9906, 'walker', 1956, 1618, 0, -44, -Math.PI * 0.5, 0.7, '#3da65d', '#18181c', '#8f5a3c', { bag: 'backpack' }),
+        makePed(9907, 'walker', 1882, 1648, 0, 44, Math.PI * 0.5, 2.5, '#cc568b', '#b39066', '#e6b892'),
+        makePed(9908, 'walker', 1958, 1384, 0, 45, Math.PI * 0.5, 1.2, '#e2d8c5', '#26303b', '#c38458'),
+        // Jogger running along Palmetto Park north sidewalk
+        makePed(9910, 'jogger', 1708, 1542, 108, 0, 0, 1.1, '#e65a3c', '#26303b', '#d69c72'),
+        // Dog walker with trotting golden dog on leash right in the Midtown sunlight
+        makePed(9911, 'dog_walker', 2082, 1540, -42, 0, Math.PI, 0.8, '#3d8f7d', '#5a3a1a', '#e6b892', { dogColor: '#c88a4a' }),
+        // Pedestrians waiting at the zebra crossing corners
+        makePed(9912, 'waiting', 1882, 1535, 0, 0, 0, 0, '#c43e47', '#18181c', '#b2764f', { bag: 'tote' }),
+        makePed(9913, 'waiting', 1882, 1549, 0, 0, -0.1, 0, '#3d5873', '#8c6b47', '#e6b892'),
+        makePed(9914, 'waiting', 1958, 1463, 0, 0, Math.PI, 0, '#2ca8ad', '#40261b', '#c38458', { hat: '#2c6eb2' }),
+        // Small chatting group near park fountain & sidewalk bench
+        makePed(9915, 'group', 1756, 1598, 0, 0, 0.4, 0, '#cc568b', '#5a3a1a', '#e6b892'),
+        makePed(9916, 'group', 1770, 1604, 0, 0, Math.PI + 0.3, 0, '#d4aa3d', '#18181c', '#8f5a3c'),
+        makePed(9917, 'group', 1763, 1615, 0, 0, -Math.PI * 0.45, 0, '#4f7ec9', '#b39066', '#d69c72'),
+        // Second small group outside Midtown storefront
+        makePed(9918, 'group', 2046, 1446, 0, 0, 0.3, 0, '#3da65d', '#26303b', '#c38458'),
+        makePed(9919, 'group', 2060, 1450, 0, 0, Math.PI - 0.2, 0, '#c76d3b', '#8c6b47', '#e6b892'),
+      );
+
+      // Varied morning traffic: bus, taxi, van, pickup, truck queuing cleanly at red light
+      game.traffic = spawnTraffic(world, roadGraph, rng, 18).filter(
+        (c) => Math.hypot(c.x - 1920, c.y - 1500) > 280
+      );
+      const qTaxi = createVehicle(1844, 1511, 0, 'taxi');
+      qTaxi.driver = 'traffic'; qTaxi.brake = 0.9; qTaxi.blinker = 1; qTaxi.color = '#f0c436';
+      const qVan = createVehicle(1790, 1511, 0, 'van');
+      qVan.driver = 'traffic'; qVan.brake = 0.85; qVan.color = '#e2e7ec';
+      const qBus = createVehicle(1724, 1511, 0, 'bus');
+      qBus.driver = 'traffic'; qBus.brake = 0.85; qBus.color = '#e4ecef';
+      const qPickup = createVehicle(2004, 1489, Math.PI, 'pickup');
+      qPickup.driver = 'traffic'; qPickup.brake = 0.9; qPickup.blinker = -1; qPickup.color = '#b84c38';
+      const qSedan = createVehicle(2066, 1489, Math.PI, 'sedan');
+      qSedan.driver = 'traffic'; qSedan.brake = 0.8; qSedan.color = '#3b82b0';
+      const nsTruck = createVehicle(1931, 1384, -Math.PI * 0.5, 'truck');
+      nsTruck.driver = 'traffic'; nsTruck.vy = -88; nsTruck.color = '#7a8f62';
+      const nsSuv = createVehicle(1909, 1612, Math.PI * 0.5, 'suv');
+      nsSuv.driver = 'traffic'; nsSuv.vy = 92; nsSuv.color = '#2b3948';
+      game.traffic.push(qTaxi, qVan, qBus, qPickup, qSedan, nsTruck, nsSuv);
+
+      camera.snap(1892, 1516);
       return true;
     }
     if (name === 'car') {
-      this.setTime(16.4);
+      this.setTime(17 + 20 / 60); // 17:20 golden hour
       this.setWanted(0);
       resetPolice(policeState);
       game.notifications.length = 0;
@@ -567,15 +649,37 @@ window.__harbor = {
       game.particles.length = 0;
       game.bullets.length = 0;
       game.rain = false;
-      this.teleport(2040, 1500);
-      const car = createVehicle(player.x, player.y, -0.06, 'sports');
+      this.teleport(2110, 1505);
+
+      // Clear previous staged vehicles or parked cars in the immediate player driving corridor
+      for (let i = parkedCars.length - 1; i >= 0; i -= 1) {
+        const pc = parkedCars[i];
+        if (pc._staged || (Math.abs(pc.y - 1500) < 30 && pc.x > 1950 && pc.x < 2360)) {
+          parkedCars.splice(i, 1);
+        }
+      }
+      // Neat kerbside parked cars lining both curbs
+      const addBayCar = (x, y, angle, type, color) => {
+        const c = createVehicle(x, y, angle, type);
+        c.color = color;
+        c._staged = true;
+        parkedCars.push(c);
+      };
+      addBayCar(2015, 1478, Math.PI, 'sedan', '#4a82a8');
+      addBayCar(2248, 1478, Math.PI, 'suv', '#303f52');
+      addBayCar(2052, 1522, 0, 'pickup', '#c46c38');
+      addBayCar(2468, 1478, Math.PI, 'van', '#e2e7ec');
+      addBayCar(2524, 1522, 0, 'sedan', '#6d8c5c');
+
+      const car = createVehicle(player.x, player.y, -0.07, 'sports');
       car.driver = 'player';
-      car.speed = 355;
-      car.vx = 352;
-      car.vy = -22;
+      car.speed = 360;
+      car.vx = 358;
+      car.vy = -24;
       car.throttle = 1.0;
-      car.steer = -0.58;
-      parkedCars.push(car);
+      car.steer = -0.62;
+      car.bodyRoll = 0.78;
+      car.driftAngle = 0.45;
       player.inCar = car;
       player.x = car.x;
       player.y = car.y;
@@ -583,74 +687,104 @@ window.__harbor = {
       player.vx = car.vx;
       player.vy = car.vy;
       game.district = world.districtAt(player.x, player.y);
-      // Realistic sweeping twin-tyre drift arc behind the sports car
+      game.districtBanner = null;
+      game.objective = 'Drive to the docks — meet Marcus';
+      game.mission = { waypoint: { x: 4500, y: 1180 } };
+
+      // Bold sweeping twin-tyre drift skid marks behind the speeding sports car
       game.skidmarks = [];
-      for (let k = 0; k < 22; k += 1) {
-        const t0 = k / 22;
-        const t1 = (k + 1) / 22;
-        const x0 = car.x - 18 - t0 * 265;
-        const y0 = car.y + 4 + Math.sin(t0 * 2.15) * 24;
-        const x1 = car.x - 18 - t1 * 265;
-        const y1 = car.y + 4 + Math.sin(t1 * 2.15) * 24;
+      for (let k = 0; k < 28; k += 1) {
+        const t0 = k / 28;
+        const t1 = (k + 1) / 28;
+        const x0 = car.x - 16 - t0 * 320;
+        const y0 = car.y + 4 + Math.sin(t0 * 2.25) * 24;
+        const x1 = car.x - 16 - t1 * 320;
+        const y1 = car.y + 4 + Math.sin(t1 * 2.25) * 24;
         const ang = Math.atan2(y1 - y0, x1 - x0);
-        const px = -Math.sin(ang) * 5.8;
-        const py = Math.cos(ang) * 5.8;
-        const fade = (1 - t0 * 0.72) * 0.56;
-        game.skidmarks.push({ x1: x0 + px, y1: y0 + py, x2: x1 + px, y2: y1 + py, alpha: fade, w: 3.1 });
-        game.skidmarks.push({ x1: x0 - px, y1: y0 - py, x2: x1 - px, y2: y1 - py, alpha: fade, w: 3.1 });
+        const px = -Math.sin(ang) * 6.0;
+        const py = Math.cos(ang) * 6.0;
+        const fade = (1 - t0 * 0.65) * 0.66;
+        game.skidmarks.push({ x1: x0 + px, y1: y0 + py, x2: x1 + px, y2: y1 + py, alpha: fade, w: 3.4 });
+        game.skidmarks.push({ x1: x0 - px, y1: y0 - py, x2: x1 - px, y2: y1 - py, alpha: fade, w: 3.4 });
       }
-      for (let s = 0; s < 14; s += 1) {
-        game.particles.push({ kind: 'smoke', x: car.x - 20 - s * 11, y: car.y + 4 + (s % 2 === 0 ? 6 : -6), vx: -28, vy: (s % 2 === 0 ? 9 : -9), age: s * 0.035, life: 1.35, size: 5.5 + s * 0.9, color: '216,218,224' });
+      for (let s = 0; s < 16; s += 1) {
+        game.particles.push({ kind: 'smoke', x: car.x - 18 - s * 11, y: car.y + 4 + (s % 2 === 0 ? 6 : -6), vx: -34, vy: (s % 2 === 0 ? 10 : -10), age: s * 0.032, life: 1.35, size: 5.5 + s * 0.9, color: '220,218,214' });
       }
-      game.traffic = spawnTraffic(world, roadGraph, rng, 12);
-      const tCar = createVehicle(car.x + 280, car.y + 15, 0, 'taxi');
-      tCar.driver = 'traffic';
-      tCar.vx = 90;
-      game.traffic.push(tCar);
-      const tCar2 = createVehicle(car.x + 440, car.y - 16, Math.PI, 'sedan');
-      tCar2.driver = 'traffic';
-      tCar2.vx = -95;
-      game.traffic.push(tCar2);
-      const tCar3 = createVehicle(car.x - 120, car.y - 18, Math.PI, 'suv');
-      tCar3.driver = 'traffic';
-      tCar3.vx = -80;
-      game.traffic.push(tCar3);
-      camera.snap(car.x + 40, car.y);
+
+      // Rich golden-hour traffic variety cleanly spaced around the boulevard (zero collisions!)
+      game.traffic = spawnTraffic(world, roadGraph, rng, 18).filter(
+        (c) => Math.hypot(c.x - car.x, c.y - car.y) > 320
+      );
+      const tBus = createVehicle(car.x + 292, 1511, 0, 'bus');
+      tBus.driver = 'traffic'; tBus.vx = 84; tBus.color = '#e4ecef';
+      const tTaxi = createVehicle(car.x + 178, 1488, Math.PI, 'taxi');
+      tTaxi.driver = 'traffic'; tTaxi.vx = -96; tTaxi.color = '#f0c436'; tTaxi.blinker = 1;
+      const tPickup = createVehicle(car.x + 392, 1488, Math.PI, 'pickup');
+      tPickup.driver = 'traffic'; tPickup.vx = -90; tPickup.color = '#b84c38';
+      const tVan = createVehicle(car.x - 172, 1488, Math.PI, 'van');
+      tVan.driver = 'traffic'; tVan.vx = -85; tVan.color = '#e2e7ec';
+      const tTruck = createVehicle(2340 - 11, car.y + 114, Math.PI * 0.5, 'truck');
+      tTruck.driver = 'traffic'; tTruck.vy = 82; tTruck.color = '#7a8f62';
+      const tSedan = createVehicle(2340 + 11, car.y - 108, -Math.PI * 0.5, 'sedan');
+      tSedan.driver = 'traffic'; tSedan.vy = -86; tSedan.color = '#3b82b0'; tSedan.brake = 0.6;
+      game.traffic.push(tBus, tTaxi, tPickup, tVan, tTruck, tSedan);
+
+      // Sidewalk pedestrians during golden hour
+      game.peds = spawnPeds(world, player, rng, [], 38);
+      game.peds.push(
+        { id: 9931, role: 'walker', x: car.x - 58, y: 1460, vx: 44, vy: 0, angle: 0, speed: 44, walkPhase: 1.0, state: 'walk', stateTimer: 6, targetX: car.x + 150, targetY: 1460, health: 40, alive: true, shirt: '#2ca8ad', pants: '#252a36', hair: '#18181c', skin: '#d69c72', hat: null, bag: 'tote', dogColor: null, fleeTimer: 0 },
+        { id: 9932, role: 'walker', x: car.x + 88, y: 1540, vx: -42, vy: 0, angle: Math.PI, speed: 42, walkPhase: 2.1, state: 'walk', stateTimer: 6, targetX: car.x - 100, targetY: 1540, health: 40, alive: true, shirt: '#c76d3b', pants: '#38465a', hair: '#5a3a1a', skin: '#c38458', hat: null, bag: 'backpack', dogColor: null, fleeTimer: 0 },
+        { id: 9933, role: 'dog_walker', x: car.x + 190, y: 1460, vx: 40, vy: 0, angle: 0, speed: 40, walkPhase: 0.6, state: 'walk', stateTimer: 6, targetX: car.x + 360, targetY: 1460, health: 40, alive: true, shirt: '#d4aa3d', pants: '#252a36', hair: '#8c6b47', skin: '#e6b892', hat: null, bag: null, dogColor: '#a66b3c', fleeTimer: 0 },
+      );
+
+      camera.snap(car.x + 42, 1500);
       return true;
     }
     if (name === 'chase') {
       this.state('car');
-      this.setTime(18.6);
+      this.setTime(19 + 40 / 60); // 19:40 dramatic coastal dusk
       setWantedLevel(wantedState, 3);
       game.wanted = 3;
       forcePoliceChase(policeState, world, player, roadGraph, rng, 3);
-      // Align pursuing cruisers behind & flanking the player without instant busted collisions
       if (policeState.units[0]) {
         const c = policeState.units[0].car;
-        c.x = player.x - 150; c.y = player.y + 10; c.angle = -0.05; c.vx = 250; c.vy = -10;
+        c.x = player.x - 108; c.y = 1511; c.angle = -0.05; c.vx = 305; c.vy = -12; c.steer = -0.35; c.bodyRoll = 0.42;
       }
       if (policeState.units[1]) {
         const c = policeState.units[1].car;
-        c.x = player.x - 255; c.y = player.y - 16; c.angle = 0.06; c.vx = 260; c.vy = 14;
+        c.x = player.x - 210; c.y = 1488; c.angle = 0.08; c.vx = 310; c.vy = 16; c.steer = 0.3; c.bodyRoll = -0.36;
       }
       if (policeState.units[2]) {
         const c = policeState.units[2].car;
-        c.x = player.x + 310; c.y = player.y - 115; c.angle = Math.PI * 0.56; c.vx = -15; c.vy = 145;
+        c.x = 2340 - 11; c.y = 1390; c.angle = Math.PI * 0.56; c.vx = -16; c.vy = 175; c.steer = 0.45; c.bodyRoll = -0.4;
       }
-      game.objective = 'Escape the police — lose the wanted level';
+      // Keep the police chase lane unobstructed
+      game.traffic = game.traffic.filter((c) => Math.hypot(c.x - (player.x - 160), c.y - 1500) > 95);
+      game.objective = 'Drive to the docks — meet Marcus';
       game.mission = { waypoint: { x: 4500, y: 1180 } };
       game.district = world.districtAt(player.x, player.y);
+      game.districtBanner = null;
       game.notifications.length = 0;
-      const extraTraffic = spawnTraffic(world, roadGraph, rng, 8);
-      game.traffic.push(...extraTraffic);
-      const extraPeds = spawnPeds(world, player, rng, game.peds, 25);
-      game.peds.push(...extraPeds);
-      game.peds.push({ id: 9991, x: player.x + 70, y: player.y - 44, vx: 55, vy: -24, angle: -0.4, speed: 70, walkPhase: 0.4, state: 'flee', stateTimer: 5, targetX: 0, targetY: 0, health: 40, alive: true, shirt: '#c43e47', hair: '#18181c', skin: '#d69c72', fleeTimer: 5 });
-      game.peds.push({ id: 9992, x: player.x + 115, y: player.y + 44, vx: 60, vy: 22, angle: 0.35, speed: 75, walkPhase: 1.6, state: 'flee', stateTimer: 5, targetX: 0, targetY: 0, health: 40, alive: true, shirt: '#2ca8ad', hair: '#5a3a1a', skin: '#c38458', fleeTimer: 5 });
-      game.bullets.push({ x: player.x - 65, y: player.y + 4, vx: 650, vy: -22, age: 0.04, life: 0.6, hit: false });
+
+      // Extra fleeing & sidewalk pedestrians for vivid dusk chaos
+      game.peds.push(
+        { id: 9991, role: 'walker', x: player.x + 56, y: 1456, vx: 65, vy: -24, angle: -0.36, speed: 72, walkPhase: 0.4, state: 'flee', stateTimer: 5, targetX: 0, targetY: 0, health: 40, alive: true, shirt: '#c43e47', pants: '#252a36', hair: '#18181c', skin: '#d69c72', hat: null, bag: null, dogColor: null, fleeTimer: 5 },
+        { id: 9992, role: 'walker', x: player.x + 118, y: 1544, vx: 62, vy: 26, angle: 0.38, speed: 75, walkPhase: 1.6, state: 'flee', stateTimer: 5, targetX: 0, targetY: 0, health: 40, alive: true, shirt: '#2ca8ad', pants: '#38465a', hair: '#5a3a1a', skin: '#c38458', hat: null, bag: 'backpack', dogColor: null, fleeTimer: 5 },
+        { id: 9993, role: 'walker', x: player.x - 95, y: 1545, vx: -58, vy: 22, angle: 2.75, speed: 70, walkPhase: 2.3, state: 'flee', stateTimer: 5, targetX: 0, targetY: 0, health: 40, alive: true, shirt: '#d4aa3d', pants: '#252a36', hair: '#8c6b47', skin: '#e6b892', hat: null, bag: null, dogColor: null, fleeTimer: 5 },
+        { id: 9994, role: 'walker', x: player.x - 175, y: 1456, vx: -55, vy: -20, angle: -2.8, speed: 68, walkPhase: 0.9, state: 'flee', stateTimer: 5, targetX: 0, targetY: 0, health: 40, alive: true, shirt: '#cc568b', pants: '#22262e', hair: '#40261b', skin: '#b2764f', hat: null, bag: 'tote', dogColor: null, fleeTimer: 5 },
+      );
+      game.bullets.push({ x: player.x - 56, y: player.y + 4, vx: 650, vy: -22, age: 0.04, life: 0.6, hit: false });
       game.particles.push({ kind: 'spark', x: player.x - 18, y: player.y + 6, vx: -80, vy: 45, age: 0, life: 0.45, size: 2.5, color: '255,220,120' });
       game.particles.push({ kind: 'spark', x: player.x - 16, y: player.y - 5, vx: -70, vy: -50, age: 0, life: 0.45, size: 2.5, color: '255,220,120' });
-      camera.snap(player.x + 25, player.y);
+
+      // Refresh blips immediately so minimap shows all 3 police cruisers + waypoint on frame 1
+      game.blips.length = 0;
+      for (const u of policeState.units) {
+        game.blips.push({ x: u.car.x, y: u.car.y, color: '#5080e0' });
+      }
+      game.blips.push({ x: 4500, y: 1180, color: '#ff9e4a' });
+
+      camera.snap(player.x + 25, 1500);
       return true;
     }
     if (name === 'wanted') {
@@ -670,25 +804,41 @@ window.__harbor = {
       game.notifications.length = 0;
       game.rain = false;
       startMissionByIndex(missionState, 0);
+      missionState.stepIndex = 1; // "Collect the package from the warehouse"
       game.objective = currentObjective(missionState);
-      this.setTime(17.7);
-      this.teleport(4488, 1180);
-      player.angle = 0;
+      this.setTime(21.0); // 21:00 deep coastal night with vibrant neon & mild bloom
+      this.teleport(4498, 1256); // Squarely inside Dockside district (> 4484)
+      player.angle = Math.PI * 0.42;
+      player.moving = false;
       player.health = 100;
       player.armour = 60;
       combat.weapon = 'pistol';
-      const dockCar = createVehicle(4386, 1142, 0.14, 'sports');
+      for (let i = parkedCars.length - 1; i >= 0; i -= 1) {
+        if (parkedCars[i]._staged) parkedCars.splice(i, 1);
+      }
+      const dockCar = createVehicle(4386, 1184, 0.14, 'sports');
       dockCar.color = '#d93d32';
       dockCar.headlights = true;
+      dockCar._headlightsOn = true;
+      dockCar._staged = true;
       parkedCars.push(dockCar);
-      game.mission = { waypoint: { x: 4532, y: 1180 } };
-      game.dialogue = 'Marcus: "Head to the docks. I\'ve got a job for you."';
-      game.dialogueTimer = 1.0;
+      const dockVan = createVehicle(4440, 1086, Math.PI * 0.5, 'van');
+      dockVan.driver = 'traffic';
+      dockVan.vy = 62;
+      dockVan.color = '#dce4ec';
+      game.traffic = [dockVan];
+      game.peds = [
+        { id: 9971, role: 'walker', x: 4416, y: 1296, vx: 0, vy: 34, angle: Math.PI * 0.5, speed: 34, walkPhase: 1.2, state: 'walk', stateTimer: 6, targetX: 4416, targetY: 1420, health: 40, alive: true, shirt: '#d4aa3d', pants: '#252a36', hair: '#18181c', skin: '#c38458', hat: '#2c6eb2', bag: null, dogColor: null, fleeTimer: 0 },
+      ];
+      game.mission = { waypoint: { x: 4520, y: 1340 } };
+      game.dialogue = 'Marcus: "Grab the crate from the back. Don\'t let anyone see you."';
+      game.dialogueTimer = 1.2;
       missionState.dialogue = game.dialogue;
-      missionState.dialogueTimer = 1.0;
+      missionState.dialogueTimer = 1.2;
       game.district = world.districtAt(player.x, player.y);
+      game.districtBanner = null;
       updateMissionBlips();
-      camera.snap(4400, 1180);
+      camera.snap(4420, 1236);
       return true;
     }
     return true;

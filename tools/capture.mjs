@@ -256,13 +256,19 @@ function writeIndexedPng(w, h, palette, indices) {
   ]);
 }
 
-function quantizePngFile(path) {
+function quantizePngFile(path, maxBytes = 262144) {
   const buf = readFileSync(path);
   const rgb = decodePngRgb(buf);
-  const { palette, indices } = quantizeMedianCut(rgb, 256);
-  const quantizedBuf = writeIndexedPng(1280, 720, palette, indices);
-  writeFileSync(path, quantizedBuf);
-  return quantizedBuf.length;
+  const paletteCounts = [256, 224, 192, 160, 128];
+  let best = null;
+  for (const nColors of paletteCounts) {
+    const { palette, indices } = quantizeMedianCut(rgb, nColors);
+    const quantizedBuf = writeIndexedPng(1280, 720, palette, indices);
+    best = quantizedBuf;
+    if (quantizedBuf.length <= maxBytes) break;
+  }
+  writeFileSync(path, best);
+  return best.length;
 }
 
 async function capture() {
@@ -302,37 +308,60 @@ async function capture() {
     {
       file: '1-cover.png',
       state: 'chase',
-      desc: 'a three-star police chase at dusk: HUD, minimap with blips, mission objective, traffic and peds visible',
+      time: 19 + 40 / 60,
+      wanted: 3,
+      holdThrottle: true,
+      desc: '19:40 dusk three-star police chase: HUD, minimap with blips, mission objective, traffic and peds',
     },
     {
       file: '2-foot.png',
       state: 'foot',
-      desc: 'on foot, HUD, city detail',
+      time: 8 + 10 / 60,
+      wanted: 0,
+      holdThrottle: false,
+      desc: '08:10 morning on foot with long shadows, street clutter and a busy sidewalk',
     },
     {
       file: '3-car.png',
       state: 'car',
-      desc: 'driving fast, traffic, skid marks, speedometer',
+      time: 17 + 20 / 60,
+      wanted: 0,
+      holdThrottle: true,
+      desc: '17:20 golden hour driving fast with traffic, skid marks and speedometer',
     },
     {
       file: '4-mission.png',
       state: 'mission',
-      desc: 'mission objective + waypoint + dialogue',
+      time: 21.0,
+      wanted: 0,
+      holdThrottle: false,
+      desc: '21:00 night at the docks with neon bloom, waypoint and dialogue',
     },
   ];
 
   for (const t of targets) {
-    console.log(`Setting state: ${t.state} for ${t.file}...`);
-    await page.evaluate((s) => window.__harbor.state(s), t.state);
-    await page.waitForTimeout(400);
+    console.log(`Setting state: ${t.state} (${t.time.toFixed(2)}h) for ${t.file}...`);
+    if (t.holdThrottle) await page.keyboard.down('KeyW');
+    await page.evaluate(({ state, time, wanted }) => {
+      window.__harbor.state(state);
+      window.__harbor.setTime(time);
+      window.__harbor.setWanted(wanted);
+    }, t);
+    // Wait one animation frame and re-stamp clock so HUD displays the exact target time
+    await page.evaluate((time) => new Promise((r) => requestAnimationFrame(() => {
+      window.__harbor.setTime(time);
+      requestAnimationFrame(r);
+    })), t.time);
 
     const outPath = join(screenshotsDir, t.file);
     await page.screenshot({ path: outPath, type: 'png' });
+    if (t.holdThrottle) await page.keyboard.up('KeyW');
+
     let size = statSync(outPath).size;
     console.log(`Raw render size: ${size} bytes (${(size / 1024).toFixed(1)} KiB)`);
 
-    // Quantize with palette to guarantee <= 256 KiB
-    size = quantizePngFile(outPath);
+    // Quantize with adaptive palette to guarantee <= 256 KiB
+    size = quantizePngFile(outPath, 262144);
     console.log(`Saved ${t.file}: ${size} bytes (${(size / 1024).toFixed(1)} KiB) — ${t.desc}`);
     if (size > 262144) {
       throw new Error(`Screenshot ${t.file} exceeds 256 KiB limit: ${size} bytes`);

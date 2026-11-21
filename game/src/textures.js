@@ -17,24 +17,36 @@ function makeTile(size, drawFn) {
 export function createSurfaceTextures(ctx) {
   const rng = makeRng(90421);
 
-  // Fine-grain asphalt with subtle mineral aggregate and faint wear streaks
-  const asphaltTile = makeTile(96, (g, s) => {
+  // Fine-grain asphalt with mineral aggregate, subtle tonal blotches and hairline tar cracks
+  const asphaltTile = makeTile(128, (g, s) => {
     g.fillStyle = PALETTE.asphalt;
     g.fillRect(0, 0, s, s);
-    for (let i = 0; i < 240; i += 1) {
+    for (let i = 0; i < 10; i += 1) {
+      g.fillStyle = rng() > 0.5 ? 'rgba(255,248,236,0.03)' : 'rgba(14,16,22,0.05)';
+      g.beginPath();
+      g.arc(rng() * s, rng() * s, 8 + rng() * 16, 0, TAU);
+      g.fill();
+    }
+    for (let i = 0; i < 420; i += 1) {
       const x = Math.floor(rng() * s);
       const y = Math.floor(rng() * s);
-      const bright = rng() > 0.5;
-      g.fillStyle = bright ? 'rgba(255,250,240,0.055)' : 'rgba(12,14,20,0.09)';
-      g.fillRect(x, y, rng() < 0.7 ? 1 : 2, 1);
+      const bright = rng() > 0.48;
+      g.fillStyle = bright ? 'rgba(255,248,236,0.065)' : 'rgba(10,12,18,0.11)';
+      g.fillRect(x, y, rng() < 0.72 ? 1 : 2, 1);
     }
     // Subtle tar repair hairline
-    g.strokeStyle = 'rgba(20,22,28,0.16)';
-    g.lineWidth = 1;
+    g.strokeStyle = 'rgba(16,18,24,0.22)';
+    g.lineWidth = 1.1;
     g.beginPath();
-    g.moveTo(12, 0);
-    g.lineTo(18, 44);
-    g.lineTo(14, s);
+    g.moveTo(18, 0);
+    g.lineTo(25, 48);
+    g.lineTo(19, 86);
+    g.lineTo(22, s);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(86, 18);
+    g.lineTo(104, 34);
+    g.lineTo(98, 56);
     g.stroke();
   });
 
@@ -42,67 +54,91 @@ export function createSurfaceTextures(ctx) {
   const highwayTile = makeTile(96, (g, s) => {
     g.fillStyle = PALETTE.highway;
     g.fillRect(0, 0, s, s);
-    for (let i = 0; i < 220; i += 1) {
+    for (let i = 0; i < 280; i += 1) {
       const x = Math.floor(rng() * s);
       const y = Math.floor(rng() * s);
-      g.fillStyle = rng() > 0.48 ? 'rgba(255,248,236,0.05)' : 'rgba(8,10,16,0.10)';
+      g.fillStyle = rng() > 0.48 ? 'rgba(255,248,236,0.055)' : 'rgba(8,10,16,0.11)';
       g.fillRect(x, y, 1, 1);
     }
   });
 
-  // Sidewalk paving slabs with beveled expansion joints
-  const sidewalkTile = makeTile(32, (g, s) => {
+  // Warm travertine/concrete sidewalk paving slabs with varied tile tones and beveled joints
+  const sidewalkTile = makeTile(64, (g, s) => {
     g.fillStyle = PALETTE.sidewalk;
     g.fillRect(0, 0, s, s);
-    g.fillStyle = 'rgba(255,252,244,0.12)';
-    g.fillRect(0, 0, 16, 16);
-    g.fillStyle = 'rgba(90,82,70,0.05)';
-    g.fillRect(16, 16, 16, 16);
-    g.strokeStyle = 'rgba(110,102,90,0.24)';
+    const step = 16;
+    for (let gy = 0; gy < s; gy += step) {
+      for (let gx = 0; gx < s; gx += step) {
+        const v = rng();
+        if (v < 0.35) {
+          g.fillStyle = 'rgba(255,250,238,0.14)';
+          g.fillRect(gx + 1, gy + 1, step - 2, step - 2);
+        } else if (v > 0.68) {
+          g.fillStyle = 'rgba(92,84,70,0.075)';
+          g.fillRect(gx + 1, gy + 1, step - 2, step - 2);
+        }
+        // Subtle sunlit top-left tile bevel
+        g.fillStyle = 'rgba(255,252,244,0.18)';
+        g.fillRect(gx + 1, gy + 1, step - 2, 1);
+      }
+    }
+    g.strokeStyle = 'rgba(104,96,84,0.28)';
     g.lineWidth = 1;
     g.beginPath();
-    g.moveTo(0, 0.5); g.lineTo(s, 0.5);
-    g.moveTo(0, 16.5); g.lineTo(s, 16.5);
-    g.moveTo(0.5, 0); g.lineTo(0.5, s);
-    g.moveTo(16.5, 0); g.lineTo(16.5, s);
+    for (let p = 0; p < s; p += step) {
+      g.moveTo(0, p + 0.5); g.lineTo(s, p + 0.5);
+      g.moveTo(p + 0.5, 0); g.lineTo(p + 0.5, s);
+    }
     g.stroke();
-    for (let i = 0; i < 24; i += 1) {
-      g.fillStyle = rng() > 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(80,74,64,0.07)';
+    for (let i = 0; i < 72; i += 1) {
+      g.fillStyle = rng() > 0.5 ? 'rgba(255,252,245,0.09)' : 'rgba(78,70,60,0.08)';
       g.fillRect(Math.floor(rng() * s), Math.floor(rng() * s), 1, 1);
     }
   });
 
-  // Sun-warmed downtown concrete plaza slabs
+  // Sun-warmed downtown architectural plaza flagstones
   const concreteTile = makeTile(64, (g, s) => {
     g.fillStyle = PALETTE.concrete;
     g.fillRect(0, 0, s, s);
-    g.fillStyle = 'rgba(255,246,232,0.07)';
-    g.fillRect(0, 0, 32, 32);
-    g.fillRect(32, 32, 32, 32);
-    g.strokeStyle = 'rgba(92,86,78,0.20)';
+    const tints = ['rgba(255,248,234,0.10)', 'rgba(84,78,68,0.07)', 'rgba(235,222,202,0.08)', 'rgba(72,68,62,0.05)'];
+    for (let gy = 0; gy < 2; gy += 1) {
+      for (let gx = 0; gx < 2; gx += 1) {
+        g.fillStyle = tints[(gx + gy * 2) % tints.length];
+        g.fillRect(gx * 32 + 1, gy * 32 + 1, 30, 30);
+        g.fillStyle = 'rgba(255,250,240,0.14)';
+        g.fillRect(gx * 32 + 1, gy * 32 + 1, 30, 1);
+      }
+    }
+    g.strokeStyle = 'rgba(84,78,70,0.24)';
     g.lineWidth = 1;
     g.strokeRect(0.5, 0.5, 31, 31);
+    g.strokeRect(32.5, 0.5, 31, 31);
+    g.strokeRect(0.5, 32.5, 31, 31);
     g.strokeRect(32.5, 32.5, 31, 31);
-    for (let i = 0; i < 65; i += 1) {
-      g.fillStyle = rng() > 0.5 ? 'rgba(255,250,242,0.06)' : 'rgba(60,56,50,0.07)';
+    for (let i = 0; i < 95; i += 1) {
+      g.fillStyle = rng() > 0.5 ? 'rgba(255,250,240,0.07)' : 'rgba(56,52,46,0.08)';
       g.fillRect(Math.floor(rng() * s), Math.floor(rng() * s), 2, 1);
     }
   });
 
-  // Industrial concrete dock slabs with weathered joints
+  // Industrial concrete dock slabs with weathered joints & subtle salt/oil stains
   const dockTile = makeTile(64, (g, s) => {
     g.fillStyle = PALETTE.dock;
     g.fillRect(0, 0, s, s);
-    g.fillStyle = 'rgba(255,248,238,0.05)';
+    g.fillStyle = 'rgba(255,248,238,0.06)';
     g.fillRect(0, 0, s, 32);
-    g.strokeStyle = 'rgba(42,46,52,0.26)';
+    g.fillStyle = 'rgba(40,44,50,0.07)';
+    g.beginPath();
+    g.arc(18, 46, 10, 0, TAU);
+    g.fill();
+    g.strokeStyle = 'rgba(38,42,48,0.30)';
     g.lineWidth = 1;
     g.beginPath();
     g.moveTo(0, 32.5); g.lineTo(s, 32.5);
     g.moveTo(32.5, 0); g.lineTo(32.5, s);
     g.stroke();
-    for (let i = 0; i < 80; i += 1) {
-      g.fillStyle = rng() > 0.55 ? 'rgba(240,238,232,0.05)' : 'rgba(30,34,40,0.09)';
+    for (let i = 0; i < 95; i += 1) {
+      g.fillStyle = rng() > 0.55 ? 'rgba(240,238,232,0.06)' : 'rgba(28,32,38,0.10)';
       g.fillRect(Math.floor(rng() * s), Math.floor(rng() * s), 2, 1);
     }
   });
@@ -111,16 +147,19 @@ export function createSurfaceTextures(ctx) {
   const parkTile = makeTile(64, (g, s) => {
     g.fillStyle = PALETTE.park;
     g.fillRect(0, 0, s, s);
-    for (let i = 0; i < 14; i += 1) {
-      g.fillStyle = rng() > 0.5 ? 'rgba(130,185,95,0.16)' : 'rgba(42,84,36,0.14)';
+    // Subtle sunlit lawn stripe
+    g.fillStyle = 'rgba(134,186,92,0.09)';
+    g.fillRect(0, 0, s * 0.5, s);
+    for (let i = 0; i < 16; i += 1) {
+      g.fillStyle = rng() > 0.5 ? 'rgba(138,192,98,0.18)' : 'rgba(38,80,34,0.16)';
       g.beginPath();
       g.arc(rng() * s, rng() * s, 5 + rng() * 9, 0, TAU);
       g.fill();
     }
-    for (let i = 0; i < 90; i += 1) {
+    for (let i = 0; i < 110; i += 1) {
       const bx = rng() * s;
       const by = rng() * s;
-      g.strokeStyle = rng() > 0.5 ? 'rgba(155,205,112,0.28)' : 'rgba(38,76,34,0.24)';
+      g.strokeStyle = rng() > 0.5 ? 'rgba(164,214,118,0.30)' : 'rgba(36,74,32,0.26)';
       g.lineWidth = 1;
       g.beginPath();
       g.moveTo(bx, by);
@@ -129,20 +168,22 @@ export function createSurfaceTextures(ctx) {
     }
   });
 
-  // Suburban lawn grass (slightly warmer sunlit tone)
+  // Suburban lawn grass (warm sunlit coastal lawn with soft mower stripe)
   const lawnTile = makeTile(64, (g, s) => {
-    g.fillStyle = '#8eaa6b';
+    g.fillStyle = '#89a564';
     g.fillRect(0, 0, s, s);
-    for (let i = 0; i < 12; i += 1) {
-      g.fillStyle = rng() > 0.5 ? 'rgba(182,208,128,0.14)' : 'rgba(90,118,62,0.12)';
+    g.fillStyle = 'rgba(180,208,124,0.09)';
+    g.fillRect(0, 0, s, s * 0.5);
+    for (let i = 0; i < 14; i += 1) {
+      g.fillStyle = rng() > 0.5 ? 'rgba(182,208,128,0.16)' : 'rgba(78,108,54,0.15)';
       g.beginPath();
       g.arc(rng() * s, rng() * s, 5 + rng() * 8, 0, TAU);
       g.fill();
     }
-    for (let i = 0; i < 60; i += 1) {
+    for (let i = 0; i < 85; i += 1) {
       const bx = rng() * s;
       const by = rng() * s;
-      g.fillStyle = rng() > 0.5 ? 'rgba(205,222,150,0.18)' : 'rgba(72,96,52,0.16)';
+      g.fillStyle = rng() > 0.5 ? 'rgba(205,222,150,0.22)' : 'rgba(66,92,46,0.18)';
       g.fillRect(bx, by, 1.5, 2.5);
     }
   });

@@ -1,16 +1,20 @@
-// Vehicle entities: sedans, trucks, sports cars. Arcade driving physics with drift,
-// damage model, skid marks, headlights, steering wheels, suspension bounce and shaded bodies.
+// Vehicle entities: sedans, sports cars, SUVs, taxis, vans, pickups, trucks, buses and police
+// cruisers. Arcade driving physics with drift, damage model, skid marks, headlights, steering
+// tyres, cornering body roll, brake lights, blinking indicators and grounded contact shadows.
 
-import { CITY, PALETTE, CAMERA } from './config.js';
-import { TAU, clamp, damp, dist, angleLerp, shade } from './util.js';
-import { drawSoftDropShadow } from './lighting.js';
+import { CITY } from './config.js';
+import { TAU, clamp, damp, dist, shade } from './util.js';
+import { drawVehicleShadow } from './lighting.js';
 
 const TYPES = {
   sedan:  { name: 'Sedan',  w: 34, h: 17, mass: 1.0, power: 320, maxSpeed: 280, grip: 0.92, color: '#3b82b0', hp: 100 },
   sports: { name: 'Sports', w: 36, h: 16, mass: 0.85, power: 460, maxSpeed: 360, grip: 0.88, color: '#d93d32', hp: 80 },
-  truck:  { name: 'Truck',  w: 44, h: 19, mass: 1.6, power: 240, maxSpeed: 200, grip: 0.95, color: '#7a8f62', hp: 160 },
+  truck:  { name: 'Truck',  w: 46, h: 20, mass: 1.6, power: 240, maxSpeed: 200, grip: 0.95, color: '#7a8f62', hp: 160 },
   suv:    { name: 'SUV',    w: 40, h: 18, mass: 1.3, power: 300, maxSpeed: 240, grip: 0.93, color: '#2b3948', hp: 130 },
   taxi:   { name: 'Taxi',   w: 35, h: 17, mass: 1.0, power: 310, maxSpeed: 270, grip: 0.91, color: '#f0c436', hp: 100 },
+  van:    { name: 'Van',    w: 41, h: 19, mass: 1.35, power: 270, maxSpeed: 225, grip: 0.94, color: '#dde3e8', hp: 135 },
+  pickup: { name: 'Pickup', w: 42, h: 18, mass: 1.25, power: 300, maxSpeed: 250, grip: 0.92, color: '#b8503c', hp: 140 },
+  bus:    { name: 'Bus',    w: 58, h: 21, mass: 2.2, power: 220, maxSpeed: 180, grip: 0.96, color: '#e4ecef', hp: 220 },
   police: { name: 'Cruiser',w: 36, h: 17, mass: 1.1, power: 420, maxSpeed: 340, grip: 0.90, color: '#182436', hp: 140 },
 };
 
@@ -46,6 +50,8 @@ export function createVehicle(x, y, angle, typeName = 'sedan') {
     skidTimer: 0,
     engineRpm: 0,
     driftAngle: 0,          // visual drift offset for the tyres
+    bodyRoll: 0,            // -1..1 subtle visual body roll when cornering
+    blinker: 0,             // -1 left, 0 off, 1 right turn indicator
     damaged: false,
     bouncePhase: 0,
   };
@@ -85,6 +91,11 @@ export function updateVehicle(v, dt, world, particles, skidmarks) {
   v.vy -= ly * latKill * dt * 8;
 
   v.driftAngle = Math.abs(latSpeed) > 30 ? latSpeed * 0.015 : 0;
+
+  // Visual cornering body roll (purely cosmetic, driven by steering + speed + lateral slip)
+  const speedRatio = clamp(Math.abs(v.speed) / 220, 0, 1);
+  const targetRoll = clamp(-v.steer * speedRatio * 0.95 - latSpeed * 0.008, -1, 1);
+  v.bodyRoll = damp(v.bodyRoll || 0, targetRoll, 9, dt);
 
   const speedFactor = clamp(Math.abs(v.speed) / 60, 0, 1);
   const turnRate = steerSpeed * speedFactor * (v.speed >= 0 ? 1 : -1);
@@ -135,7 +146,6 @@ export function updateVehicle(v, dt, world, particles, skidmarks) {
       if (impactSpeed > 60) {
         v.hp -= impactSpeed * 0.08;
         v.damaged = v.hp < v.maxHp * 0.5;
-        // Impact sparks
         for (let k = 0; k < 5; k += 1) {
           particles.push({
             kind: 'spark',
@@ -181,7 +191,7 @@ export function updateVehicle(v, dt, world, particles, skidmarks) {
     }
   }
 
-  // Exhaust smoke puff when accelerating (darker if heavily damaged)
+  // Exhaust smoke puff when accelerating
   if (v.throttle > 0.3 && Math.abs(v.speed) > 20) {
     if (Math.random() < (v.damaged ? 0.32 : 0.14)) {
       particles.push({
@@ -231,57 +241,51 @@ export function vehicleCollision(a, b) {
   return false;
 }
 
-function drawWheel(ctx, wx, wy, steerAngle) {
+function drawWheel(ctx, wx, wy, steerAngle, heavy = false) {
   ctx.save();
   ctx.translate(wx, wy);
   if (steerAngle) ctx.rotate(steerAngle);
-  ctx.fillStyle = '#181a1f';
+  const wl = heavy ? 8.6 : 7.8;
+  const wt = heavy ? 4.2 : 3.8;
+  ctx.fillStyle = '#14161b';
   ctx.beginPath();
-  ctx.roundRect(-3.8, -1.8, 7.6, 3.6, 1.2);
+  ctx.roundRect(-wl * 0.5, -wt * 0.5, wl, wt, 1.3);
   ctx.fill();
-  ctx.fillStyle = '#5c626e';
-  ctx.fillRect(-1.5, -1.1, 3, 2.2);
+  ctx.fillStyle = '#5c6370';
+  ctx.fillRect(-1.8, -wt * 0.32, 3.6, wt * 0.64);
   ctx.restore();
 }
 
-/** Draw one vehicle with directional shadow, turning wheels, shaded glossy body,
- *  tinted glass, specular streak, suspension bounce, brake glow and night headlight cones. */
-export function drawVehicle(ctx, v, night, sun, dusk = 0) {
+/** Draw one vehicle with grounded contact shadow, steering tyres, subtle cornering body roll,
+ *  shaded glossy body, brake lights, blinking indicators and night headlight cones. */
+export function drawVehicle(ctx, v, night, sun, dusk = 0, t = 0) {
   const hw = v.w * 0.5;
   const hh = v.h * 0.5;
   const speedRatio = clamp(Math.hypot(v.vx, v.vy) / 260, 0, 1);
-  // Subtle suspension bounce scaled by road speed + engine rumble
-  const bounce = (v.driver ? Math.sin((v.bouncePhase || 0) * 1.4 + v.id) * (0.28 + speedRatio * 0.48) : 0);
-  const scaleBounce = 1 + bounce * 0.022;
+  const bounce = (v.driver ? Math.sin((v.bouncePhase || 0) * 1.4 + v.id) * (0.28 + speedRatio * 0.45) : 0);
+  const scaleBounce = 1 + bounce * 0.020;
+  const roll = clamp(v.bodyRoll || 0, -1, 1);
+  const rollBodyY = roll * 1.4;
+  const rollRoofY = roll * 2.4;
+  const lift = v.type === 'bus' ? 22 : v.type === 'truck' ? 20 : v.type === 'van' ? 17 : 13;
 
-  // 1. Directional sun shadow + soft ground contact shadow
-  if (sun) {
-    drawSoftDropShadow(ctx, v.x, v.y, hw * 1.06, hh * 1.08, sun, 13, v.angle);
-  } else {
-    ctx.save();
-    ctx.translate(v.x + 3, v.y + 4);
-    ctx.rotate(v.angle);
-    ctx.fillStyle = 'rgba(14, 18, 28, 0.28)';
-    ctx.beginPath();
-    ctx.roundRect(-hw - 1, -hh - 1, v.w + 2, v.h + 2, 5);
-    ctx.fill();
-    ctx.restore();
-  }
+  // 1. Grounded contact shadow + directional sun shadow following the chassis
+  drawVehicleShadow(ctx, v.x, v.y, v.w, v.h, v.angle, sun, lift);
 
   // 2. Volumetric dual headlight cones at dusk & night (drawn beneath/ahead of hood)
-  const lightPower = clamp(night * 1.1 + dusk * 0.65, 0, 1);
-  if (v.headlights && lightPower > 0.16 && v.driver) {
+  const lightPower = clamp(night * 1.1 + dusk * 0.68, 0, 1);
+  if (v.headlights && lightPower > 0.16 && (v.driver || v._headlightsOn)) {
     ctx.save();
     ctx.translate(v.x, v.y);
     ctx.rotate(v.angle);
     ctx.globalCompositeOperation = 'lighter';
     for (const side of [-1, 1]) {
-      const ly = side * hh * 0.54;
-      const beamLen = v.type === 'police' ? 128 : 112;
+      const ly = side * hh * 0.56;
+      const beamLen = v.type === 'police' ? 132 : v.type === 'bus' ? 124 : 112;
       const spread = 24;
       const grad = ctx.createLinearGradient(hw - 1, ly, hw + beamLen, ly);
-      grad.addColorStop(0, `rgba(255, 240, 190, ${(0.42 * lightPower).toFixed(3)})`);
-      grad.addColorStop(0.45, `rgba(255, 224, 152, ${(0.16 * lightPower).toFixed(3)})`);
+      grad.addColorStop(0, `rgba(255, 240, 190, ${(0.44 * lightPower).toFixed(3)})`);
+      grad.addColorStop(0.45, `rgba(255, 224, 152, ${(0.17 * lightPower).toFixed(3)})`);
       grad.addColorStop(1, 'rgba(255, 210, 120, 0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
@@ -295,62 +299,171 @@ export function drawVehicle(ctx, v, night, sun, dusk = 0) {
     ctx.restore();
   }
 
-  // 3. Vehicle chassis & wheels
+  // 3. Wheels (planted on the road, front pair steers visibly)
   ctx.save();
-  ctx.translate(v.x, v.y + bounce * 0.45);
+  ctx.translate(v.x, v.y);
   ctx.rotate(v.angle);
+
+  const steerVis = clamp((v.steer || 0) * 0.48, -0.5, 0.5);
+  const heavy = v.type === 'bus' || v.type === 'truck';
+  const frontAxle = v.type === 'bus' ? hw * 0.64 : hw * 0.56;
+  const rearAxle = v.type === 'bus' ? -hw * 0.60 : -hw * 0.54;
+  drawWheel(ctx, frontAxle, -hh - 0.8, steerVis, heavy);
+  drawWheel(ctx, frontAxle, hh + 0.8, steerVis, heavy);
+  drawWheel(ctx, rearAxle, -hh - 0.8, 0, heavy);
+  drawWheel(ctx, rearAxle, hh + 0.8, 0, heavy);
+
+  // 4. Chassis body (shifts subtly with cornering body roll + suspension bounce)
+  ctx.translate(0, rollBodyY + bounce * 0.35);
   ctx.scale(scaleBounce, scaleBounce);
 
-  // Visible wheels: front pair turns visibly with v.steer!
-  const steerVis = clamp((v.steer || 0) * 0.42, -0.45, 0.45);
-  drawWheel(ctx, hw * 0.54, -hh - 0.6, steerVis);
-  drawWheel(ctx, hw * 0.54, hh + 0.6, steerVis);
-  drawWheel(ctx, -hw * 0.54, -hh - 0.6, 0);
-  drawWheel(ctx, -hw * 0.54, hh + 0.6, 0);
-
   // Lower dark bumper / skirt outline
-  ctx.fillStyle = '#1d2129';
+  ctx.fillStyle = '#1b1f27';
   ctx.beginPath();
-  ctx.roundRect(-hw - 0.8, -hh - 0.5, v.w + 1.6, v.h + 1, 5);
+  ctx.roundRect(-hw - 0.8, -hh - 0.5, v.w + 1.6, v.h + 1, v.type === 'bus' ? 3.5 : 5);
   ctx.fill();
 
-  // Shaded metallic body gradient (sunlit top-left to richer shaded lower flank)
+  // Shaded metallic body gradient (subtle highlight shift with body roll)
   const baseColor = v.damaged ? '#696d74' : v.color;
   const bodyGrad = ctx.createLinearGradient(0, -hh, 0, hh);
-  bodyGrad.addColorStop(0, shade(baseColor, 1.24));
-  bodyGrad.addColorStop(0.42, baseColor);
-  bodyGrad.addColorStop(1, shade(baseColor, 0.70));
+  bodyGrad.addColorStop(0, shade(baseColor, 1.24 - roll * 0.08));
+  bodyGrad.addColorStop(0.45, baseColor);
+  bodyGrad.addColorStop(1, shade(baseColor, 0.70 + roll * 0.08));
   ctx.fillStyle = bodyGrad;
   ctx.beginPath();
-  ctx.roundRect(-hw, -hh, v.w, v.h, 4.5);
+  ctx.roundRect(-hw, -hh, v.w, v.h, v.type === 'bus' ? 3 : 4.5);
   ctx.fill();
 
-  // Hood crease & crisp specular highlight ribbon along sunlit flank
+  // Crisp sunlit flank specular ribbon
   ctx.fillStyle = 'rgba(255, 252, 244, 0.28)';
   ctx.beginPath();
-  ctx.roundRect(-hw + 3, -hh + 1.4, v.w - 6, 2.2, 1);
+  ctx.roundRect(-hw + 3, -hh + 1.4, v.w - 6, 2.0, 1);
   ctx.fill();
 
-  // Type-specific silhouettes & trim
-  if (v.type === 'truck') {
-    // Cargo flatbed behind cab with slatted ribs
-    ctx.fillStyle = '#363b42';
-    ctx.fillRect(-hw + 2.5, -hh + 2.2, v.w * 0.52, v.h - 4.4);
+  // 5. Type-specific upper silhouettes (roof shifts slightly more with body roll for 2.5D lean)
+  if (v.type === 'bus') {
+    // Coastal teal & amber transit livery stripes along flanks
+    ctx.fillStyle = '#1f8f96';
+    ctx.fillRect(-hw + 2, -hh + 1.2, v.w - 4, 2.6);
+    ctx.fillRect(-hw + 2, hh - 3.8, v.w - 4, 2.6);
+    ctx.fillStyle = '#f0a63b';
+    ctx.fillRect(-hw + 4, -hh + 3.8, v.w - 10, 1.1);
+    ctx.fillRect(-hw + 4, hh - 4.9, v.w - 10, 1.1);
+
+    // Panoramic front windshield & rear glass
+    ctx.fillStyle = '#152736';
+    ctx.beginPath();
+    ctx.roundRect(hw - 7.5, -hh + 1.8, 6.2, v.h - 3.6, 1.8);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(175, 224, 245, 0.36)';
+    ctx.fillRect(hw - 4.2, -hh + 2.5, 2.0, v.h - 5);
+
+    // Elevated white bus roof with subtle body-roll shift & twin rooftop AC pods
+    ctx.save();
+    ctx.translate(0, rollRoofY * 0.45);
+    ctx.fillStyle = '#f2f6f8';
+    ctx.beginPath();
+    ctx.roundRect(-hw + 3.5, -hh + 3.2, v.w - 11.5, v.h - 6.4, 2.2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(40, 52, 66, 0.25)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    // Dual rooftop HVAC pods + emergency hatch
+    ctx.fillStyle = '#c8d2d8';
+    ctx.fillRect(-10, -5, 11, 10);
+    ctx.fillRect(6, -5, 10, 10);
+    ctx.fillStyle = '#7c8994';
+    ctx.fillRect(-8, -3.2, 7, 6.4);
+    ctx.fillRect(8, -3.2, 6, 6.4);
+    ctx.fillStyle = '#ffaa3b';
+    ctx.fillRect(hw - 9.5, -3.5, 2.2, 7); // destination board header
+    ctx.restore();
+  } else if (v.type === 'van') {
+    // Front windshield
+    ctx.fillStyle = '#152736';
+    ctx.beginPath();
+    ctx.roundRect(hw * 0.26, -hh * 0.78, hw * 0.50, v.h * 0.78, 2.2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(175, 224, 245, 0.36)';
+    ctx.fillRect(hw * 0.56, -hh * 0.70, 2.2, v.h * 0.70);
+
+    // Extended boxy van roof with roof rack bars & rear door seam
+    ctx.save();
+    ctx.translate(0, rollRoofY * 0.45);
+    ctx.fillStyle = shade(baseColor, 1.12);
+    ctx.beginPath();
+    ctx.roundRect(-hw + 2.5, -hh * 0.78, v.w * 0.68, v.h * 0.78, 2.5);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(30, 38, 48, 0.35)';
+    ctx.lineWidth = 1.1;
+    // Utility roof rack rails
+    ctx.beginPath();
+    ctx.moveTo(-hw + 5, -hh * 0.56); ctx.lineTo(hw * 0.22, -hh * 0.56);
+    ctx.moveTo(-hw + 5, hh * 0.56); ctx.lineTo(hw * 0.22, hh * 0.56);
+    ctx.moveTo(-hw + 8, -hh * 0.56); ctx.lineTo(-hw + 8, hh * 0.56);
+    ctx.moveTo(-2, -hh * 0.56); ctx.lineTo(-2, hh * 0.56);
+    ctx.stroke();
+    // Rear double-door split line
+    ctx.beginPath();
+    ctx.moveTo(-hw, 0); ctx.lineTo(-hw + 3.2, 0);
+    ctx.stroke();
+    ctx.restore();
+  } else if (v.type === 'pickup') {
+    // Open recessed dark pickup cargo bed with ribbed liner & occasional cargo box
+    ctx.fillStyle = '#2d323a';
+    ctx.beginPath();
+    ctx.roundRect(-hw + 2.2, -hh + 2.2, v.w * 0.44, v.h - 4.4, 1.5);
+    ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-    ctx.lineWidth = 1;
-    for (let rx = -hw + 6; rx < 0; rx += 5) {
+    ctx.lineWidth = 0.9;
+    for (let rx = -hw + 5; rx < -hw + v.w * 0.44; rx += 4.2) {
       ctx.beginPath();
-      ctx.moveTo(rx, -hh + 2.5);
-      ctx.lineTo(rx, hh - 2.5);
+      ctx.moveTo(rx, -hh + 2.8); ctx.lineTo(rx, hh - 2.8);
       ctx.stroke();
     }
+    // Toolbox / cargo crate in bed
+    ctx.fillStyle = v.id % 2 === 0 ? '#a88050' : '#bfc6cc';
+    ctx.fillRect(-hw + v.w * 0.32, -hh + 3.2, 5.5, v.h - 6.4);
+
+    // Pickup cab greenhouse & roof
+    ctx.fillStyle = '#152736';
+    ctx.beginPath();
+    ctx.roundRect(-hw + v.w * 0.48, -hh * 0.76, v.w * 0.30, v.h * 0.76, 2.2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(175, 224, 245, 0.36)';
+    ctx.fillRect(hw * 0.40, -hh * 0.68, 2.2, v.h * 0.68);
+    ctx.save();
+    ctx.translate(0, rollRoofY * 0.45);
+    ctx.fillStyle = shade(baseColor, 1.15);
+    ctx.beginPath();
+    ctx.roundRect(-hw + v.w * 0.51, -hh * 0.64, v.w * 0.16, v.h * 0.64, 1.8);
+    ctx.fill();
+    ctx.restore();
+  } else if (v.type === 'truck') {
+    // Box/flatbed cargo rear with ribbed panels
+    ctx.save();
+    ctx.translate(0, rollRoofY * 0.45);
+    ctx.fillStyle = '#d6d4cc';
+    ctx.beginPath();
+    ctx.roundRect(-hw + 2.0, -hh + 1.5, v.w * 0.62, v.h - 3.0, 1.8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(42, 48, 56, 0.25)';
+    ctx.lineWidth = 1;
+    for (let rx = -hw + 7; rx < -hw + v.w * 0.62; rx += 6) {
+      ctx.beginPath();
+      ctx.moveTo(rx, -hh + 2); ctx.lineTo(rx, hh - 2);
+      ctx.stroke();
+    }
+    ctx.restore();
     // Cab windshield
     ctx.fillStyle = '#182b3a';
     ctx.beginPath();
-    ctx.roundRect(hw * 0.24, -hh * 0.72, hw * 0.34, v.h * 0.72, 2);
+    ctx.roundRect(hw * 0.34, -hh * 0.74, hw * 0.38, v.h * 0.74, 2);
     ctx.fill();
+    ctx.fillStyle = 'rgba(175, 224, 245, 0.34)';
+    ctx.fillRect(hw * 0.58, -hh * 0.66, 2.2, v.h * 0.66);
   } else {
-    // Tinted cabin greenhouse (windshield + rear glass + metallic roof cap)
+    // Sedan / Sports / SUV / Taxi / Police greenhouse & rolling roof cap
     const cabinX = v.type === 'sports' ? -hw * 0.34 : -hw * 0.38;
     const cabinW = v.type === 'suv' ? v.w * 0.56 : v.w * 0.46;
     ctx.fillStyle = '#132331';
@@ -359,7 +472,7 @@ export function drawVehicle(ctx, v, night, sun, dusk = 0) {
     ctx.fill();
 
     // Windshield sky specular glint
-    ctx.fillStyle = 'rgba(175, 224, 245, 0.36)';
+    ctx.fillStyle = 'rgba(175, 224, 245, 0.38)';
     ctx.beginPath();
     ctx.moveTo(cabinX + cabinW - 5, -hh * 0.66);
     ctx.lineTo(cabinX + cabinW - 1, -hh * 0.66);
@@ -368,44 +481,54 @@ export function drawVehicle(ctx, v, night, sun, dusk = 0) {
     ctx.closePath();
     ctx.fill();
 
-    // Roof panel slightly lighter than body
+    // Roof panel with subtle cornering lean
+    ctx.save();
+    ctx.translate(0, rollRoofY * 0.5);
     const roofX = cabinX + (v.type === 'suv' ? 4 : 5);
     const roofW = cabinW - (v.type === 'suv' ? 10 : 12);
-    ctx.fillStyle = v.type === 'police' ? '#f2f4f8' : shade(baseColor, 1.14);
+    ctx.fillStyle = v.type === 'police' ? '#f2f4f8' : shade(baseColor, 1.15);
     ctx.beginPath();
     ctx.roundRect(roofX, -hh * 0.6, roofW, v.h * 0.6, 2);
     ctx.fill();
 
-    // Sports car racing stripes & rear spoiler
-    if (v.type === 'sports') {
-      ctx.fillStyle = 'rgba(255, 246, 230, 0.68)';
-      ctx.fillRect(cabinX + cabinW + 1, -1.8, hw - (cabinX + cabinW) - 3, 1.3);
-      ctx.fillRect(cabinX + cabinW + 1, 0.6, hw - (cabinX + cabinW) - 3, 1.3);
-      ctx.fillStyle = shade(baseColor, 0.55);
-      ctx.fillRect(-hw + 1, -hh + 1.5, 3, v.h - 3);
-    }
-
-    // Taxi roof sign & checkerboard accent
     if (v.type === 'taxi') {
       ctx.fillStyle = '#1c1e22';
-      ctx.fillRect(-3, -4, 6, 8);
+      ctx.fillRect(-3.2, -4.2, 6.4, 8.4);
       ctx.fillStyle = '#ffe278';
-      ctx.fillRect(-2, -3, 4, 6);
+      ctx.fillRect(-2.2, -3.2, 4.4, 6.4);
     }
 
-    // Police cruiser black-and-white doors, push bar & roof lightbar housing
     if (v.type === 'police') {
-      ctx.fillStyle = '#f2f4f8';
-      ctx.fillRect(-hw * 0.25, -hh + 0.5, v.w * 0.28, 1.6);
-      ctx.fillRect(-hw * 0.25, hh - 2.1, v.w * 0.28, 1.6);
-      // Lightbar bracket
       ctx.fillStyle = '#202630';
       ctx.fillRect(-3.5, -hh * 0.52, 4.5, v.h * 0.52);
       ctx.fillStyle = '#2d70ff';
       ctx.fillRect(-3, -hh * 0.48, 3.5, v.h * 0.22);
       ctx.fillStyle = '#ff3232';
       ctx.fillRect(-3, 0.4, 3.5, v.h * 0.22);
-      // Front push bumper
+    }
+    ctx.restore();
+
+    if (v.type === 'sports') {
+      ctx.fillStyle = 'rgba(255, 246, 230, 0.72)';
+      ctx.fillRect(cabinX + cabinW + 1, -1.8, hw - (cabinX + cabinW) - 3, 1.3);
+      ctx.fillRect(cabinX + cabinW + 1, 0.6, hw - (cabinX + cabinW) - 3, 1.3);
+      ctx.fillStyle = shade(baseColor, 0.55);
+      ctx.fillRect(-hw + 1, -hh + 1.5, 3, v.h - 3);
+    }
+
+    if (v.type === 'taxi') {
+      // Iconic black-and-white checker dashes along flanks
+      for (let cx = -hw + 5; cx < hw - 6; cx += 4) {
+        ctx.fillStyle = (Math.floor(cx / 4) % 2 === 0) ? '#1a1c20' : '#f4f0e4';
+        ctx.fillRect(cx, -hh + 0.6, 2.2, 1.3);
+        ctx.fillRect(cx, hh - 1.9, 2.2, 1.3);
+      }
+    }
+
+    if (v.type === 'police') {
+      ctx.fillStyle = '#f2f4f8';
+      ctx.fillRect(-hw * 0.25, -hh + 0.5, v.w * 0.28, 1.6);
+      ctx.fillRect(-hw * 0.25, hh - 2.1, v.w * 0.28, 1.6);
       ctx.fillStyle = '#181c22';
       ctx.fillRect(hw, -hh * 0.45, 2.2, v.h * 0.45);
     }
@@ -416,17 +539,23 @@ export function drawVehicle(ctx, v, night, sun, dusk = 0) {
     ctx.fillRect(cabinX + cabinW - 4, hh - 0.4, 2.5, 1.8);
   }
 
-  // Brake lights & tail lights (bright glowing red bloom when braking or reversing)
+  // 6. Brake lights & tail lights (bright red when braking/queuing, mild bloom at night)
   const braking = v.brake > 0.05 || v.handbrake || v.speed < -5;
   ctx.fillStyle = braking ? '#ff2a2a' : '#8a1c1c';
-  ctx.fillRect(-hw, -hh * 0.72, 2.8, 3.8);
-  ctx.fillRect(-hw, hh * 0.72 - 3.8, 2.8, 3.8);
+  ctx.fillRect(-hw, -hh * 0.74, 3.0, 3.8);
+  ctx.fillRect(-hw, hh * 0.74 - 3.8, 3.0, 3.8);
+  if (braking) {
+    // Crisp brake lamp flare readable even in daylight
+    ctx.fillStyle = 'rgba(255, 110, 96, 0.75)';
+    ctx.fillRect(-hw - 0.6, -hh * 0.68, 2.0, 2.6);
+    ctx.fillRect(-hw - 0.6, hh * 0.68 - 2.6, 2.0, 2.6);
+  }
   if (braking || night > 0.25) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const bAlpha = braking ? 0.55 : 0.24 * night;
-    const bRad = braking ? 11 : 6;
-    for (const ly of [-hh * 0.52, hh * 0.52]) {
+    const bAlpha = braking ? (0.34 + night * 0.36) : 0.24 * night;
+    const bRad = braking ? (8 + night * 5) : 6;
+    for (const ly of [-hh * 0.54, hh * 0.54]) {
       const tg = ctx.createRadialGradient(-hw, ly, 1, -hw - 2, ly, bRad);
       tg.addColorStop(0, `rgba(255, 50, 40, ${bAlpha.toFixed(3)})`);
       tg.addColorStop(1, 'rgba(255, 30, 20, 0)');
@@ -438,10 +567,30 @@ export function drawVehicle(ctx, v, night, sun, dusk = 0) {
     ctx.restore();
   }
 
-  // Crisp headlight lenses
-  ctx.fillStyle = (v.headlights && lightPower > 0.16) ? '#fff6d6' : '#ebe4c8';
-  ctx.fillRect(hw - 2.6, -hh * 0.72, 2.6, 3.8);
-  ctx.fillRect(hw - 2.6, hh * 0.72 - 3.8, 2.6, 3.8);
+  // 7. Blinking amber turn-signal indicators (left = -1, right = 1)
+  if (v.blinker && Math.sin(t * 9.5 + v.id) > -0.15) {
+    const sy = v.blinker < 0 ? -hh * 0.78 : hh * 0.78 - 2.4;
+    ctx.fillStyle = '#ffae24';
+    ctx.fillRect(hw - 2.6, sy, 2.8, 2.6);
+    ctx.fillRect(-hw, sy, 2.8, 2.6);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const bx of [hw - 1, -hw + 1]) {
+      const ig = ctx.createRadialGradient(bx, sy + 1.2, 0.6, bx, sy + 1.2, 7.5);
+      ig.addColorStop(0, 'rgba(255, 186, 48, 0.72)');
+      ig.addColorStop(1, 'rgba(255, 160, 20, 0)');
+      ctx.fillStyle = ig;
+      ctx.beginPath();
+      ctx.arc(bx, sy + 1.2, 7.5, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 8. Crisp headlight lenses
+  ctx.fillStyle = (v.headlights && lightPower > 0.16 && (v.driver || v._headlightsOn)) ? '#fff6d6' : '#ebe4c8';
+  ctx.fillRect(hw - 2.6, -hh * 0.74, 2.6, 3.8);
+  ctx.fillRect(hw - 2.6, hh * 0.74 - 3.8, 2.6, 3.8);
 
   // Body scratches if damaged
   if (v.hp < v.maxHp * 0.6) {
@@ -458,28 +607,51 @@ export function drawVehicle(ctx, v, night, sun, dusk = 0) {
   ctx.restore();
 }
 
-/** Spawn parked cars along streets. */
-export function spawnParkedCars(world, rng, count = 40) {
+/** Spawn parked cars neatly inside painted parking bays along BOTH curbs across the city. */
+export function spawnParkedCars(world, rng, count = 115) {
   const cars = [];
-  const typeNames = ['sedan', 'sports', 'truck', 'suv', 'taxi'];
+  const typeNames = ['sedan', 'sedan', 'suv', 'pickup', 'van', 'sports', 'taxi'];
+  const colors = ['#3b82b0', '#d94538', '#688c5c', '#2d3b4c', '#e6c038', '#984c82', '#d8823c', '#3d8f7d', '#c6ccd2', '#e4e8ec'];
+
+  const bays = world.parkingBays || [];
+  if (bays.length > 0) {
+    // Deterministically pick bays along both curbs, leaving gaps so curbs look natural
+    const step = Math.max(1, Math.floor(bays.length / count));
+    for (let i = 0; i < bays.length && cars.length < count; i += step) {
+      const idx = (i + Math.floor(rng() * Math.min(3, step))) % bays.length;
+      const bay = bays[idx];
+      if (!bay || world.isWater(bay.carX, bay.carY)) continue;
+      // Avoid parking right on top of another parked car
+      if (cars.some((c) => dist(c.x, c.y, bay.carX, bay.carY) < 42)) continue;
+      const typeName = typeNames[Math.floor(rng() * typeNames.length)];
+      const car = createVehicle(bay.carX, bay.carY, bay.angle, typeName);
+      car.color = typeName === 'taxi' ? '#f0c436' : typeName === 'van' ? (rng() < 0.6 ? '#e2e7ec' : '#3a7c8c') : colors[Math.floor(rng() * colors.length)];
+      cars.push(car);
+    }
+    return cars;
+  }
+
+  // Fallback if parkingBays are absent
   for (let n = 0; n < count; n += 1) {
     const useV = rng() < 0.5;
-    let x, y, angle;
+    const side = rng() < 0.5 ? 1 : -1;
+    let x;
+    let y;
+    let angle;
     if (useV) {
       const road = world.roadsV[Math.floor(rng() * world.roadsV.length)];
       y = 300 + rng() * 2600;
-      x = road + CITY.roadHalf + 6;
-      angle = rng() < 0.5 ? Math.PI / 2 : -Math.PI / 2;
+      x = road + side * (CITY.roadHalf - 9);
+      angle = side === 1 ? -Math.PI / 2 : Math.PI / 2;
     } else {
       const road = world.roadsH[Math.floor(rng() * (world.roadsH.length - 1))];
       x = 300 + rng() * 4000;
-      y = road + CITY.roadHalf + 6;
-      angle = rng() < 0.5 ? 0 : Math.PI;
+      y = road + side * (CITY.roadHalf - 9);
+      angle = side === 1 ? 0 : Math.PI;
     }
     if (world.isWater(x, y)) continue;
     const typeName = typeNames[Math.floor(rng() * typeNames.length)];
     const car = createVehicle(x, y, angle, typeName);
-    const colors = ['#3b82b0', '#d94538', '#78945e', '#2b3948', '#f0c436', '#a84b8e', '#dc8d3c', '#3d8f7d', '#c6cad0'];
     car.color = colors[Math.floor(rng() * colors.length)];
     cars.push(car);
   }

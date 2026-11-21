@@ -1,11 +1,10 @@
 // The 2.5D architectural renderer: buildings extrude away from the camera centre with
-// directional sun shadows, glowing night window grids, parapets, rooftop equipment
-// (AC units, vents, water tanks, skylights, helipads), storefront awnings, construction
-// fencing, dockside neon signs, and detailed street props.
+// directional sun shadows, base ambient occlusion, glowing night window grids, parapets,
+// rooftop equipment (AC units, vents, water tanks, skylights, helipads), storefront awnings,
+// construction fencing and dockside neon signs.
 
-import { PALETTE } from './config.js';
 import { TAU, hash01, lerp, shade } from './util.js';
-import { drawCastRectShadow, drawSoftDropShadow } from './lighting.js';
+import { drawCastRectShadow } from './lighting.js';
 
 const LEAN = 0.0012; // roof offset per unit of height per unit of distance from the camera
 
@@ -439,7 +438,8 @@ export function drawConstructionLot(ctx, lot) {
 /** Draw mounted dockside and downtown neon sign housings and glowing tubes. */
 export function drawNeonSign(ctx, n, night, dusk, t) {
   const flicker = n.flicker && Math.sin(t * 23 + n.ph) > 0.92 ? 0.5 : 1;
-  const intensity = Math.min(1, 0.45 + night * 0.55 + dusk * 0.45) * flicker;
+  const glowAmt = Math.min(1, night * 0.95 + dusk * 0.72);
+  const intensity = Math.min(1, 0.35 + glowAmt * 0.65) * flicker;
   ctx.save();
   // Dark metal backing cabinet
   ctx.fillStyle = '#181c26';
@@ -449,188 +449,13 @@ export function drawNeonSign(ctx, n, night, dusk, t) {
   ctx.globalAlpha = intensity;
   ctx.lineWidth = 2.6;
   ctx.strokeRect(n.x - n.w * 0.5 + 1.5, n.y - n.h * 0.5 + 1.5, n.w - 3, n.h - 3);
-  // Hot white-tinted inner tube core
+  // Hot white-tinted inner tube core (brightest at night)
   ctx.fillStyle = '#ffffff';
-  ctx.globalAlpha = intensity * 0.85;
+  ctx.globalAlpha = (0.28 + glowAmt * 0.62) * flicker;
   if (n.orient === 'h') {
     ctx.fillRect(n.x - n.w * 0.36, n.y - 1.3, n.w * 0.72, 2.6);
   } else {
     ctx.fillRect(n.x - 1.3, n.y - n.h * 0.36, 2.6, n.h * 0.72);
   }
   ctx.restore();
-}
-
-export function drawProp(ctx, p, night, t, sun) {
-  const sdx = sun ? sun.dx * 34 : 7;
-  const sdy = sun ? sun.dy * 34 : 5;
-
-  if (p.kind === 'palm') {
-    const s = p.s ?? 1;
-    const sway = Math.sin(t * 1.1 + p.ph) * 2.2 * s;
-    // Long directional palm shadow
-    ctx.save();
-    ctx.fillStyle = `rgba(12, 16, 26, ${(sun ? sun.alpha * 0.85 : 0.2).toFixed(3)})`;
-    ctx.beginPath();
-    ctx.ellipse(p.x + sdx * s * 0.9, p.y + sdy * s * 0.9, 16 * s, 7 * s, Math.atan2(sdy, sdx), 0, TAU);
-    ctx.fill();
-    ctx.restore();
-
-    const topX = p.x + sway;
-    const topY = p.y - 34 * s;
-    // Trunk with warm sunlit rim
-    ctx.strokeStyle = PALETTE.trunk;
-    ctx.lineWidth = 3.8 * s;
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.quadraticCurveTo(p.x + sway * 0.45, p.y - 19 * s, topX, topY);
-    ctx.stroke();
-
-    // Layered palm fronds: darker under-fronds + sunlit top fronds
-    for (let k = 0; k < 8; k += 1) {
-      const a = (k / 8) * TAU + p.ph * 0.3;
-      const ex = topX + Math.cos(a) * 19 * s;
-      const ey = topY + Math.sin(a) * 12.5 * s - 2;
-      ctx.strokeStyle = k % 2 === 0 ? '#2b6f3b' : '#439c52';
-      ctx.lineWidth = 3.0 * s;
-      ctx.beginPath();
-      ctx.moveTo(topX, topY);
-      ctx.quadraticCurveTo(topX + Math.cos(a) * 10 * s, topY + Math.sin(a) * 6 * s - 7 * s, ex, ey);
-      ctx.stroke();
-    }
-    ctx.fillStyle = '#5c3f24';
-    ctx.beginPath();
-    ctx.arc(topX, topY, 2.8 * s, 0, TAU);
-    ctx.fill();
-  } else if (p.kind === 'tree') {
-    const s = p.s ?? 1;
-    if (sun) {
-      drawSoftDropShadow(ctx, p.x, p.y + 3, 15 * s, 8 * s, sun, 14 * s);
-    } else {
-      ctx.fillStyle = 'rgba(18, 22, 32, 0.2)';
-      ctx.beginPath();
-      ctx.ellipse(p.x + 6, p.y + 5, 15 * s, 7 * s, 0, 0, TAU);
-      ctx.fill();
-    }
-    ctx.fillStyle = '#336835';
-    ctx.beginPath();
-    ctx.arc(p.x + 2 * s, p.y - 4 * s, 13.5 * s, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = PALETTE.tree;
-    ctx.beginPath();
-    ctx.arc(p.x - 5 * s, p.y - 5 * s, 10.5 * s, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = '#5da052';
-    ctx.beginPath();
-    ctx.arc(p.x + 6 * s, p.y - 7 * s, 9.5 * s, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = '#7fc26a';
-    ctx.beginPath();
-    ctx.arc(p.x - 2 * s, p.y - 10 * s, 6.2 * s, 0, TAU);
-    ctx.fill();
-  } else if (p.kind === 'lamp') {
-    // Directional pole shadow
-    ctx.strokeStyle = `rgba(12, 16, 26, ${(sun ? sun.alpha * 0.75 : 0.18).toFixed(3)})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(p.x + sdx * 0.55, p.y + sdy * 0.55);
-    ctx.stroke();
-
-    ctx.fillStyle = '#333942';
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 2.8, 0, TAU);
-    ctx.fill();
-    ctx.strokeStyle = '#3d4550';
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(p.x, p.y - 16);
-    ctx.stroke();
-    // Overhanging sodium lamp arm
-    const armX = p.x + (p.side ? p.side * 5 : 0);
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y - 16);
-    ctx.lineTo(armX, p.y - 16);
-    ctx.stroke();
-    ctx.fillStyle = night > 0.15 ? PALETTE.lamp : '#e4e2d6';
-    ctx.beginPath();
-    ctx.arc(armX, p.y - 16, 3.2, 0, TAU);
-    ctx.fill();
-  } else if (p.kind === 'crane') {
-    const sway = Math.sin(t * 0.5 + p.ph) * 2.5;
-    // Directional crane shadow
-    ctx.fillStyle = `rgba(12, 16, 26, ${(sun ? sun.alpha * 0.9 : 0.22).toFixed(3)})`;
-    ctx.fillRect(p.x - 16 + sdx * 0.8, p.y + 4 + sdy * 0.8, 52, 16);
-    ctx.fillStyle = '#9e4f22';
-    ctx.fillRect(p.x - 22, p.y - 9, 44, 18);
-    ctx.strokeStyle = '#f2be42';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(p.x - 21, p.y - 8, 42, 16);
-    // Lattice tower mast
-    ctx.strokeStyle = '#d96e26';
-    ctx.lineWidth = 6.5;
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y - 6);
-    ctx.lineTo(p.x + sway * 0.4, p.y - 98);
-    ctx.stroke();
-    ctx.strokeStyle = '#f09446';
-    ctx.lineWidth = 1.5;
-    for (let k = 16; k < 92; k += 14) {
-      ctx.beginPath();
-      ctx.moveTo(p.x - 3, p.y - k);
-      ctx.lineTo(p.x + 3, p.y - k - 10);
-      ctx.stroke();
-    }
-    // Boom arm
-    ctx.strokeStyle = '#e07a2c';
-    ctx.lineWidth = 5.5;
-    ctx.beginPath();
-    ctx.moveTo(p.x - 38 + sway, p.y - 98);
-    ctx.lineTo(p.x + 118 + sway, p.y - 98);
-    ctx.stroke();
-    // Counterweight & operator cab
-    ctx.fillStyle = '#7e3c18';
-    ctx.fillRect(p.x - 44 + sway, p.y - 104, 16, 13);
-    ctx.fillStyle = '#384654';
-    ctx.fillRect(p.x + 8 + sway, p.y - 95, 11, 10);
-    // Hoist cable & spreader
-    ctx.strokeStyle = '#3a4048';
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.moveTo(p.x + 84 + sway, p.y - 95);
-    ctx.lineTo(p.x + 84 + sway, p.y - 44);
-    ctx.stroke();
-    ctx.fillStyle = '#e8a832';
-    ctx.fillRect(p.x + 77 + sway, p.y - 46, 14, 6);
-    // Blinking red aviation warning light on top
-    if (Math.sin(t * 4 + p.ph) > -0.2) {
-      ctx.fillStyle = '#ff3838';
-      ctx.beginPath();
-      ctx.arc(p.x + sway * 0.4, p.y - 104, 3, 0, TAU);
-      ctx.fill();
-    }
-  } else if (p.kind === 'bench') {
-    ctx.fillStyle = 'rgba(14, 18, 28, 0.22)';
-    ctx.fillRect(p.x - 7, p.y + 2, 17, 6);
-    ctx.fillStyle = '#8b6542';
-    ctx.fillRect(p.x - 8, p.y - 3, 16, 6);
-    ctx.fillStyle = '#a87d56';
-    ctx.fillRect(p.x - 8, p.y - 3, 16, 2);
-    ctx.fillStyle = '#403830';
-    ctx.fillRect(p.x - 7, p.y + 3, 2, 2.5);
-    ctx.fillRect(p.x + 5, p.y + 3, 2, 2.5);
-  } else if (p.kind === 'hydrant') {
-    ctx.fillStyle = 'rgba(14, 18, 28, 0.24)';
-    ctx.beginPath();
-    ctx.ellipse(p.x + 1.5, p.y + 1.5, 3.6, 2.4, 0, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = '#d14334';
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 3.2, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = '#f2e0a4';
-    ctx.beginPath();
-    ctx.arc(p.x - 0.5, p.y - 0.8, 1.3, 0, TAU);
-    ctx.fill();
-  }
 }
