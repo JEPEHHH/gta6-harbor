@@ -1,61 +1,83 @@
-// Every tuning number and colour in one place. The playfield is a fixed 1280x720 logical area;
-// the renderer scales it to the window, so no rule below depends on the screen size.
+// Blackwater Harbor — every tuning number, the city seed and the palette in one place.
+// World units are pixels at zoom 1; the renderer scales the view to the window.
 
-export const FIELD = { width: 1280, height: 720, groundY: 664 };
+/** Fixed seed: the city lays out identically on every visit and every screenshot. */
+export const CITY_SEED = 20261121;
 
-/** The simulation's fixed step, in seconds: 60 updates a second whatever the display's rate. */
 export const STEP = 1 / 60;
 
+export const CITY = {
+  width: 4800,
+  height: 3800,
+  pitch: 420,          // distance between road centre lines
+  roadHalf: 28,        // half the asphalt width (two lanes)
+  walk: 16,            // sidewalk width on each block side
+  cols: 11,            // vertical roads
+  rows: 8,             // horizontal roads
+  first: 240,          // first road centre on each axis
+  seaY: 3420,          // ocean starts south of this
+  beachY: 3260,        // sand starts here
+  eastX: 4620,         // ocean starts east of this
+  basin: { x: 4300, y: 1560, w: 320, h: 540 }, // harbour basin cut into the docks
+};
+
 export const PLAYER = {
-  width: 72,
-  height: 24,
-  speed: 560,
-  invulnerable: 1.5,
+  radius: 9,
+  walk: 150,
+  sprint: 242,
+  accel: 12,
+  health: 100,
+  startMoney: 250,
+  spawn: { x: 1710, y: 3212 },
 };
 
-export const LIVES = 3;
-
-export const BLOCK = {
-  minWidth: 40,
-  maxWidth: 110,
-  height: 36,
-  speed: 240,
-  speedPerLevel: 30,
-  speedJitter: 90,
-  interval: 0.55,
-  intervalScale: 0.88,
-  minInterval: 0.14,
-  dodgePoints: 1,
+export const CAMERA = {
+  footZoom: 1.06,
+  carZoom: 0.92,
+  lead: 0.32,          // seconds of velocity the camera looks ahead
+  maxLead: 150,
+  smooth: 5.5,
 };
 
-export const COIN = {
-  size: 24,
-  speed: 190,
-  speedPerLevel: 14,
-  interval: 1.4,
-  intervalJitter: 0.8,
-  points: 10,
+export const TIME = {
+  start: 17.3,         // golden hour on a new game
+  title: 18.1,         // dusk behind the title screen
+  daySeconds: 1200,    // real seconds for a full 24 h cycle
 };
-
-/** Seconds of play per level, and the last level: speeds and spawn rates stop growing there. */
-export const LEVEL = { seconds: 12, max: 12 };
-
-/** How many falling things can exist at once; the pool is allocated once, at boot. */
-export const POOL_SIZE = 64;
 
 export const PALETTE = {
-  backdrop: '#11141b',
-  sky: '#1b1f2a',
-  ground: '#2a3040',
-  player: '#4fc3f7',
-  block: '#e5534b',
-  coin: '#f2c94c',
-  panel: '#252b38',
-  text: '#eef1f5',
-  muted: '#8b93a3',
+  land: '#a9b585',
+  sand: '#e9d69c',
+  wetSand: '#d8bf85',
+  sea: '#17798a',
+  seaDeep: '#0d5468',
+  foam: '#bfe8e2',
+  asphalt: '#63616b',
+  highway: '#5c5a66',
+  sidewalk: '#cbc6b6',
+  lane: '#d9b64c',
+  zebra: '#e8e6df',
+  grass: '#8fb573',
+  park: '#7cae62',
+  concrete: '#a3a6ab',
+  dock: '#8f959c',
+  pier: '#a9825f',
+  trunk: '#8a6a48',
+  palm: '#3f8f4f',
+  tree: '#4f8f4a',
+  night: '#333c6e',
+  lamp: '#ffd98a',
+  hud: '#f2f5f7',
+  hudDim: '#9fb0ba',
+  hudPanel: 'rgba(10, 18, 26, 0.72)',
+  accent: '#ff9e4a',
+  teal: '#37c2c9',
+  health: '#67d06f',
+  armour: '#5aa7e8',
+  star: '#ffcf4d',
+  blood: '#b52a2a',
 };
 
 export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 
-/** Where the best score is kept between visits (this browser only). */
-export const BEST_KEY = 'block-dodger.best';
+export const SAVE_KEY = 'blackwater-harbor.save.v1';
