@@ -3,6 +3,7 @@
 
 import { CITY, FONT, PALETTE } from './config.js';
 import { TAU, clamp, formatClock, formatMoney } from './util.js';
+import { drawWeaponHUD } from './combat.js';
 
 const MM = { x: 24, y: 720 - 174, w: 216, h: 150 };
 const MM_RANGE = 1500; // world units across the minimap
@@ -227,10 +228,15 @@ export function drawHUD(ctx, g) {
 
   drawSpeedometer(ctx, g);
 
+  // Weapon HUD, bottom right above the speed
+  if (g.combat && !g.player.inCar) {
+    drawWeaponHUD(ctx, g.combat, 1256, 680, FONT);
+  }
+
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(200,212,220,0.55)';
   ctx.font = `500 12px ${FONT}`;
-  ctx.fillText('WASD move · Shift sprint · F enter vehicle · P pause', 1256, 700);
+  ctx.fillText('WASD move · Shift sprint · F enter vehicle · P pause · R weapon', 1256, 710);
 }
 
 export function drawTitle(ctx, g, t) {

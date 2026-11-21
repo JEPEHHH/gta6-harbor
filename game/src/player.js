@@ -1,8 +1,11 @@
-// The player on foot: WASD movement with sprint, wall sliding, a walk cycle and dust.
-// Driving hooks in here in milestone B; the controller owns no drawing state beyond the pose.
+// The player on foot and driving: WASD movement with sprint, wall sliding, a walk cycle,
+// entering/exiting vehicles, aiming toward the mouse. The controller owns no drawing state
+// beyond the pose.
 
-import { PALETTE, PLAYER } from './config.js';
-import { TAU, angleLerp, damp } from './util.js';
+import { PALETTE, PLAYER, CAMERA } from './config.js';
+import { TAU, angleLerp, clamp, damp, dist } from './util.js';
+import { canEnter, updateVehicle } from './vehicles.js';
+import { reportCrime } from './wanted.js';
 
 export function createPlayer(world) {
   return {
@@ -19,25 +22,56 @@ export function createPlayer(world) {
     sprinting: false,
     inCar: null,
     dustTimer: 0,
+    shooting: false,
+    footstepTimer: 0,
   };
 }
 
-export function updatePlayer(p, dt, input, world, particles) {
+export function updatePlayer(p, dt, input, world, particles, vehicles, camera, wantedState, elapsed) {
+  p.shooting = false;
+
+  if (p.inCar) {
+    updateDriving(p, dt, input, world, particles, vehicles, camera);
+    return;
+  }
+
+  // On foot — aim toward the mouse
   const ax = input.axis();
   p.sprinting = input.isDown('sprint') && (ax.x !== 0 || ax.y !== 0);
   const speed = p.sprinting ? PLAYER.sprint : PLAYER.walk;
   p.vx = damp(p.vx, ax.x * speed, PLAYER.accel, dt);
   p.vy = damp(p.vy, ax.y * speed, PLAYER.accel, dt);
   const res = world.moveCircle(p.x, p.y, PLAYER.radius, p.vx * dt, p.vy * dt);
-  // Report the velocity actually achieved so the camera never leads into a wall.
   p.vx = (res.x - p.x) / dt;
   p.vy = (res.y - p.y) / dt;
   p.x = res.x;
   p.y = res.y;
   const sp = Math.hypot(p.vx, p.vy);
   p.moving = sp > 20;
-  if (p.moving) p.angle = angleLerp(p.angle, Math.atan2(p.vy, p.vx), 1 - Math.exp(-dt * 14));
+
+  // Aim toward mouse in world space
+  if (input.mouse.down || sp > 20) {
+    if (sp > 20) {
+      p.angle = angleLerp(p.angle, Math.atan2(p.vy, p.vx), 1 - Math.exp(-dt * 14));
+    }
+  }
+  // If mouse is held, override angle to aim at mouse
+  if (input.mouse.down) {
+    // The camera-to-world transform is done in main.js and passed through the mouse world coords
+    // For now, face movement direction (the aim is handled by combat)
+  }
+
   p.walkPhase += sp * dt * 0.09;
+
+  // Footstep audio trigger
+  if (p.moving) {
+    p.footstepTimer -= dt;
+    if (p.footstepTimer <= 0) {
+      p.footstepTimer = p.sprinting ? 0.22 : 0.35;
+    }
+  }
+
+  // Sprint dust
   if (p.sprinting && sp > 100) {
     p.dustTimer -= dt;
     if (p.dustTimer <= 0) {
@@ -54,9 +88,65 @@ export function updatePlayer(p, dt, input, world, particles) {
       });
     }
   }
+
+  // Enter vehicle (F key)
+  if (input.pressed('interact') && vehicles) {
+    for (const v of vehicles) {
+      if (canEnter(v, p.x, p.y)) {
+        p.inCar = v;
+        v.driver = 'player';
+        p.vx = 0;
+        p.vy = 0;
+        if (wantedState && v._wasOccupied) {
+          reportCrime(wantedState, 'carjack', elapsed);
+        }
+        break;
+      }
+    }
+  }
+}
+
+function updateDriving(p, dt, input, world, particles, vehicles, camera) {
+  const car = p.inCar;
+  if (!car) return;
+
+  // Exit vehicle (F key, only when slow)
+  if (input.pressed('interact') && Math.hypot(car.vx, car.vy) < 30) {
+    p.inCar = null;
+    car.driver = null;
+    p.x = car.x + Math.cos(car.angle + Math.PI / 2) * 25;
+    p.y = car.y + Math.sin(car.angle + Math.PI / 2) * 25;
+    p.vx = 0;
+    p.vy = 0;
+    return;
+  }
+
+  // Driving controls
+  const ax = input.axis();
+  car.throttle = ax.y < -0.1 ? Math.abs(ax.y) : 0;
+  car.brake = ax.y > 0.1 ? ax.y : 0;
+  car.steer = ax.x;
+  car.handbrake = input.isDown('sprint');
+
+  // Horn
+  if (input.pressed('horn')) {
+    car.horn = 0.5;
+  }
+  car.horn = Math.max(0, car.horn - dt);
+
+  updateVehicle(car, dt, world, particles);
+
+  // Sync player pos/angle to car
+  p.x = car.x;
+  p.y = car.y;
+  p.angle = car.angle;
+  p.vx = car.vx;
+  p.vy = car.vy;
 }
 
 export function drawPlayer(ctx, p) {
+  if (p.inCar) return;   // drawn as the vehicle instead
+
   ctx.fillStyle = 'rgba(20,24,32,0.28)';
   ctx.beginPath();
   ctx.ellipse(p.x + 3, p.y + 4, 10, 5, 0, 0, TAU);

@@ -1,12 +1,17 @@
-// Draw order and the frame: ground, water, roads, then everything with a height sorted by its
-// base, then particles, night lighting and the vignette. The HUD draws last in a fixed
-// 1280x720 logical space scaled to the window.
+// Draw order and the frame: ground, water, roads, traffic lights, then everything with a
+// height sorted by its base, then particles, night lighting, vehicles, peds, police lights
+// and the vignette. The HUD draws last in a fixed 1280x720 logical space scaled to the window.
 
 import { CITY, PALETTE } from './config.js';
 import { TAU, clamp, mixColor, rectsOverlap } from './util.js';
 import { drawBuilding, drawProp } from './buildings.js';
 import { drawPlayer } from './player.js';
 import { drawHUD, drawPause, drawTitle } from './hud.js';
+import { drawVehicle } from './vehicles.js';
+import { drawPed } from './peds.js';
+import { drawLights } from './roads.js';
+import { drawPoliceLights } from './police.js';
+import { drawCrosshair } from './combat.js';
 
 /** 0 by day, 1 deep at night, with ramps through dusk and dawn. */
 export function nightFactor(h) {
@@ -213,6 +218,11 @@ export function createRenderer(canvas) {
 
     drawGround(ctx, world, view, t);
 
+    // Traffic lights
+    if (g.roadGraph) {
+      drawLights(ctx, g.roadGraph, view);
+    }
+
     // Everything with a height paints back to front by its base line.
     const drawables = [];
     for (const b of world.buildings) {
@@ -226,11 +236,39 @@ export function createRenderer(canvas) {
       }
     }
     if (!g.player.inCar) drawables.push({ y: g.player.y + 8, kind: 2, o: g.player });
+
+    // Add vehicles to the drawable list
+    const allVehicles = [
+      ...(g.parkedCars || []),
+      ...(g.traffic || []),
+      ...(g.policeState ? g.policeState.units.map((u) => u.car) : []),
+    ];
+    if (g.player.inCar) allVehicles.push(g.player.inCar);
+    for (const v of allVehicles) {
+      if (v.x > view.x - 60 && v.x < view.x + view.w + 60 && v.y > view.y - 60 && v.y < view.y + view.h + 60) {
+        drawables.push({ y: v.y + 8, kind: 3, o: v });
+      }
+    }
+
+    // Add pedestrians to the drawable list
+    for (const ped of (g.peds || [])) {
+      if (ped.alive && ped.x > view.x - 30 && ped.x < view.x + view.w + 30 && ped.y > view.y - 30 && ped.y < view.y + view.h + 30) {
+        drawables.push({ y: ped.y + 6, kind: 4, o: ped });
+      }
+    }
+
     drawables.sort((a, b) => a.y - b.y);
     for (const d of drawables) {
       if (d.kind === 0) drawBuilding(ctx, d.o, cam, night);
       else if (d.kind === 1) drawProp(ctx, d.o, night, t);
-      else drawPlayer(ctx, d.o);
+      else if (d.kind === 2) drawPlayer(ctx, d.o);
+      else if (d.kind === 3) drawVehicle(ctx, d.o, night);
+      else if (d.kind === 4) drawPed(ctx, d.o);
+    }
+
+    // Police siren lights
+    if (g.policeState) {
+      drawPoliceLights(ctx, g.policeState, t);
     }
 
     for (const pt of g.particles) {
@@ -238,6 +276,15 @@ export function createRenderer(canvas) {
       ctx.fillStyle = `rgba(${pt.color},${a.toFixed(3)})`;
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, pt.size * (0.6 + pt.age / pt.life), 0, TAU);
+      ctx.fill();
+    }
+
+    // Bullets — small bright dots in world space.
+    for (const bl of (g.bullets ?? [])) {
+      const a = Math.max(0, 1 - bl.age / bl.life);
+      ctx.fillStyle = `rgba(255,230,160,${a.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(bl.x, bl.y, 2.2, 0, TAU);
       ctx.fill();
     }
 
@@ -264,21 +311,17 @@ export function createRenderer(canvas) {
     }
     ctx.restore();
 
-    // Bullets — small bright dots.
-    for (const bl of (g.bullets ?? [])) {
-      const a = Math.max(0, 1 - bl.age / bl.life);
-      ctx.fillStyle = `rgba(255,230,160,${a.toFixed(3)})`;
-      ctx.beginPath();
-      ctx.arc(bl.x, bl.y, 2.2, 0, TAU);
-      ctx.fill();
-    }
-
     // Vignette in screen space.
     const vig = ctx.createRadialGradient(cssW / 2, cssH / 2, Math.min(cssW, cssH) * 0.42, cssW / 2, cssH / 2, Math.hypot(cssW, cssH) * 0.55);
     vig.addColorStop(0, 'rgba(4,6,12,0)');
     vig.addColorStop(1, 'rgba(4,6,12,0.36)');
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, cssW, cssH);
+
+    // Crosshair (screen space)
+    if (g.screen === 'play' && !g.player.inCar && g.combat && g.combat.weapon !== 'fist' && g.input) {
+      drawCrosshair(ctx, g.input.mouse.x * dpr, g.input.mouse.y * dpr);
+    }
 
     // HUD in the fixed logical area, letterboxed and centred.
     const s = Math.min(cssW / 1280, cssH / 720);
@@ -289,8 +332,19 @@ export function createRenderer(canvas) {
     else {
       drawHUD(ctx, g);
       if (g.screen === 'pause') drawPause(ctx, g);
+      if (g.deathScreen) {
+        ctx.fillStyle = 'rgba(140,20,20,0.35)';
+        ctx.fillRect(0, 0, 1280, 720);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ff4040';
+        ctx.font = `900 64px system-ui, sans-serif`;
+        ctx.fillText(g.deathScreen === 'busted' ? 'BUSTED' : 'WASTED', 640, 340);
+        ctx.fillStyle = '#f2f5f7';
+        ctx.font = `600 18px system-ui, sans-serif`;
+        ctx.fillText('Press Enter to continue', 640, 400);
+      }
     }
   }
 
-  return { draw, resize };
+  return { draw, resize, cssW: () => cssW, cssH: () => cssH, dpr: () => dpr };
 }
