@@ -27,11 +27,11 @@ export function createPlayer(world) {
   };
 }
 
-export function updatePlayer(p, dt, input, world, particles, vehicles, camera, wantedState, elapsed) {
+export function updatePlayer(p, dt, input, world, particles, vehicles, camera, wantedState, elapsed, skidmarks) {
   p.shooting = false;
 
   if (p.inCar) {
-    updateDriving(p, dt, input, world, particles, vehicles, camera);
+    updateDriving(p, dt, input, world, particles, vehicles, camera, skidmarks);
     return;
   }
 
@@ -106,7 +106,7 @@ export function updatePlayer(p, dt, input, world, particles, vehicles, camera, w
   }
 }
 
-function updateDriving(p, dt, input, world, particles, vehicles, camera) {
+function updateDriving(p, dt, input, world, particles, vehicles, camera, skidmarks) {
   const car = p.inCar;
   if (!car) return;
 
@@ -134,7 +134,7 @@ function updateDriving(p, dt, input, world, particles, vehicles, camera) {
   }
   car.horn = Math.max(0, car.horn - dt);
 
-  updateVehicle(car, dt, world, particles);
+  updateVehicle(car, dt, world, particles, skidmarks);
 
   // Sync player pos/angle to car
   p.x = car.x;

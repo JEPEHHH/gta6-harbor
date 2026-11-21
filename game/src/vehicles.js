@@ -50,7 +50,7 @@ export function createVehicle(x, y, angle, typeName = 'sedan') {
 }
 
 /** Arcade driving physics: throttle, brake, drift and collision with the world. */
-export function updateVehicle(v, dt, world, particles) {
+export function updateVehicle(v, dt, world, particles, skidmarks) {
   const t = TYPES[v.type] || TYPES.sedan;
   const drag = 0.98;
   const brakePower = 600;
@@ -165,6 +165,17 @@ export function updateVehicle(v, dt, world, particles) {
         age: 0, life: 1.2, size: 3 + Math.random() * 2,
         color: '180,178,172',
       });
+      if (skidmarks) {
+        const perpX = -fy * (v.h * 0.35);
+        const perpY = fx * (v.h * 0.35);
+        const rx = v.x - fx * halfW * 0.7;
+        const ry = v.y - fy * halfW * 0.7;
+        const prevX = rx - v.vx * 0.03;
+        const prevY = ry - v.vy * 0.03;
+        skidmarks.push({ x1: prevX + perpX, y1: prevY + perpY, x2: rx + perpX, y2: ry + perpY, alpha: 0.5, w: 3 });
+        skidmarks.push({ x1: prevX - perpX, y1: prevY - perpY, x2: rx - perpX, y2: ry - perpY, alpha: 0.5, w: 3 });
+        if (skidmarks.length > 200) skidmarks.splice(0, 2);
+      }
     }
   }
 

@@ -147,23 +147,37 @@ export function resetPolice(ps) {
   ps.respawnTimer = 2;
 }
 
-/** Draw police siren lights on cars. */
+/** Draw police siren lights on cars and ground glow. */
 export function drawPoliceLights(ctx, ps, t) {
   for (const u of ps.units) {
     if (!u.sirenOn) continue;
     const car = u.car;
     const flash = Math.sin(t * 12) > 0;
+
+    // Flashing ground strobe pool around the cruiser
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const strobeColor = flash ? 'rgba(230,40,40,0.22)' : 'rgba(40,100,240,0.22)';
+    const grad = ctx.createRadialGradient(car.x, car.y, 10, car.x, car.y, 90);
+    grad.addColorStop(0, strobeColor);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(car.x, car.y, 90, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
     // Red/blue lights on the roof
     ctx.save();
     ctx.translate(car.x, car.y);
     ctx.rotate(car.angle);
     ctx.fillStyle = flash ? '#ff2020' : '#2040ff';
     ctx.beginPath();
-    ctx.arc(-2, -car.h * 0.15, 3, 0, TAU);
+    ctx.arc(-2, -car.h * 0.15, 3.5, 0, TAU);
     ctx.fill();
     ctx.fillStyle = flash ? '#2040ff' : '#ff2020';
     ctx.beginPath();
-    ctx.arc(-2, car.h * 0.15, 3, 0, TAU);
+    ctx.arc(-2, car.h * 0.15, 3.5, 0, TAU);
     ctx.fill();
     ctx.restore();
   }

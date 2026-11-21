@@ -218,6 +218,16 @@ export function createRenderer(canvas) {
 
     drawGround(ctx, world, view, t);
 
+    // Skid marks on roads
+    for (const sm of (g.skidmarks || [])) {
+      ctx.strokeStyle = `rgba(24,24,28,${(sm.alpha || 0.45).toFixed(2)})`;
+      ctx.lineWidth = sm.w || 3.5;
+      ctx.beginPath();
+      ctx.moveTo(sm.x1, sm.y1);
+      ctx.lineTo(sm.x2, sm.y2);
+      ctx.stroke();
+    }
+
     // Traffic lights
     if (g.roadGraph) {
       drawLights(ctx, g.roadGraph, view);
@@ -269,6 +279,34 @@ export function createRenderer(canvas) {
     // Police siren lights
     if (g.policeState) {
       drawPoliceLights(ctx, g.policeState, t);
+    }
+
+    // In-world mission waypoint marker
+    if (g.mission && g.mission.waypoint) {
+      const wp = g.mission.waypoint;
+      const wpR = 22 + Math.sin(t * 4) * 4;
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(wp.x, wp.y, wpR, wpR * 0.55, 0, 0, TAU);
+      ctx.fillStyle = 'rgba(255,158,74,0.32)';
+      ctx.fill();
+      ctx.strokeStyle = '#ff9e4a';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      const bobY = wp.y - 30 + Math.sin(t * 3.5) * 6;
+      ctx.fillStyle = '#ff9e4a';
+      ctx.beginPath();
+      ctx.moveTo(wp.x, bobY - 12);
+      ctx.lineTo(wp.x + 9, bobY);
+      ctx.lineTo(wp.x, bobY + 12);
+      ctx.lineTo(wp.x - 9, bobY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      ctx.restore();
     }
 
     for (const pt of g.particles) {

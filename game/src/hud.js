@@ -1,5 +1,6 @@
-// The HUD: minimap with blips, health and armour, money, wanted stars, the objective line,
-// notifications and the speedometer — plus the title and pause screens, all in 1280x720 space.
+// The HUD: minimap with blips and roads, health and armour, money, wanted stars, the objective
+// line, dialogue box, notifications, the speedometer — plus the title and pause screens,
+// all rendered in a fixed 1280x720 logical space scaled to the window.
 
 import { CITY, FONT, PALETTE } from './config.js';
 import { TAU, clamp, formatClock, formatMoney } from './util.js';
@@ -39,6 +40,12 @@ function drawMinimap(ctx, g) {
   const my = (wy) => MM.y + (wy - p.y) * scale + MM.h / 2;
 
   panel(ctx, MM.x - 3, MM.y - 3, MM.w + 6, MM.h + 6, 10);
+  if (g.wanted > 0) {
+    const flash = Math.sin(g.elapsed * 10) > 0;
+    ctx.strokeStyle = flash ? '#e03a3a' : '#3068d8';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(MM.x - 4, MM.y - 4, MM.w + 8, MM.h + 8);
+  }
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(MM.x, MM.y, MM.w, MM.h, 7);
@@ -46,6 +53,7 @@ function drawMinimap(ctx, g) {
   ctx.fillStyle = '#12242c';
   ctx.fillRect(MM.x, MM.y, MM.w, MM.h);
 
+  // Sea areas
   ctx.fillStyle = '#1d5f70';
   const seaTop = my(CITY.seaY);
   if (seaTop < MM.y + MM.h) ctx.fillRect(MM.x, Math.max(MM.y, seaTop), MM.w, MM.h);
@@ -53,12 +61,24 @@ function drawMinimap(ctx, g) {
   if (eastLeft < MM.x + MM.w) ctx.fillRect(Math.max(MM.x, eastLeft), MM.y, MM.w, MM.h);
   ctx.fillRect(mx(CITY.basin.x), my(CITY.basin.y), CITY.basin.w * scale, CITY.basin.h * scale);
 
+  // Land blocks
   for (const b of world.blocks) {
-    if (b.district !== 'park') continue;
-    ctx.fillStyle = '#2f6a44';
-    ctx.fillRect(mx(b.x), my(b.y), b.w * scale, b.h * scale);
+    if (b.district === 'park') {
+      ctx.fillStyle = '#2f6a44';
+    } else if (b.district === 'downtown') {
+      ctx.fillStyle = '#3a4a5a';
+    } else if (b.district === 'docks') {
+      ctx.fillStyle = '#4a5a6a';
+    } else {
+      ctx.fillStyle = '#2a3a2a';
+    }
+    const bx = mx(b.x);
+    const by = my(b.y);
+    if (bx > MM.x + MM.w || by > MM.y + MM.h) continue;
+    ctx.fillRect(bx, by, b.w * scale, b.h * scale);
   }
 
+  // Roads
   ctx.strokeStyle = 'rgba(226,228,222,0.75)';
   ctx.lineWidth = 2.4;
   ctx.beginPath();
@@ -76,23 +96,51 @@ function drawMinimap(ctx, g) {
   }
   ctx.stroke();
 
+  // Beach strip
+  const beachTop = my(CITY.beachY);
+  const beachBot = my(CITY.seaY);
+  if (beachTop < MM.y + MM.h && beachBot > MM.y) {
+    ctx.fillStyle = 'rgba(233,214,156,0.35)';
+    ctx.fillRect(MM.x, Math.max(MM.y, beachTop), MM.w, Math.min(MM.y + MM.h, beachBot) - Math.max(MM.y, beachTop));
+  }
+
+  // Blips (police, mission waypoints)
   for (const blip of g.blips) {
+    const bx = mx(blip.x);
+    const by = my(blip.y);
+    if (bx < MM.x - 6 || bx > MM.x + MM.w + 6 || by < MM.y - 6 || by > MM.y + MM.h + 6) continue;
     ctx.fillStyle = blip.color;
     ctx.beginPath();
-    ctx.arc(mx(blip.x), my(blip.y), 3, 0, TAU);
+    ctx.arc(bx, by, 3.5, 0, TAU);
     ctx.fill();
   }
+
+  // Mission waypoint diamond
   if (g.mission && g.mission.waypoint) {
     const wp = g.mission.waypoint;
     const wx = clamp(mx(wp.x), MM.x + 7, MM.x + MM.w - 7);
     const wy = clamp(my(wp.y), MM.y + 7, MM.y + MM.h - 7);
     ctx.fillStyle = PALETTE.accent;
     ctx.beginPath();
-    ctx.moveTo(wx, wy - 6);
-    ctx.lineTo(wx + 5, wy);
-    ctx.lineTo(wx, wy + 6);
-    ctx.lineTo(wx - 5, wy);
+    ctx.moveTo(wx, wy - 7);
+    ctx.lineTo(wx + 6, wy);
+    ctx.lineTo(wx, wy + 7);
+    ctx.lineTo(wx - 6, wy);
     ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+
+  // Traffic vehicles as small dots
+  for (const v of (g.traffic || [])) {
+    const vx = mx(v.x);
+    const vy = my(v.y);
+    if (vx < MM.x || vx > MM.x + MM.w || vy < MM.y || vy > MM.y + MM.h) continue;
+    ctx.fillStyle = 'rgba(200,200,200,0.4)';
+    ctx.beginPath();
+    ctx.arc(vx, vy, 1.5, 0, TAU);
     ctx.fill();
   }
 
@@ -102,15 +150,16 @@ function drawMinimap(ctx, g) {
   ctx.rotate(p.angle + Math.PI / 2);
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.moveTo(0, -6);
-  ctx.lineTo(4.5, 5);
-  ctx.lineTo(0, 2.5);
-  ctx.lineTo(-4.5, 5);
+  ctx.moveTo(0, -7);
+  ctx.lineTo(5, 6);
+  ctx.lineTo(0, 3);
+  ctx.lineTo(-5, 6);
   ctx.closePath();
   ctx.fill();
   ctx.restore();
   ctx.restore();
 
+  // Compass markers
   ctx.fillStyle = PALETTE.hudDim;
   ctx.font = `600 11px ${FONT}`;
   ctx.textAlign = 'center';
@@ -142,6 +191,55 @@ function drawSpeedometer(ctx, g) {
   ctx.fillStyle = PALETTE.hudDim;
   ctx.font = `600 11px ${FONT}`;
   ctx.fillText('KM/H', cx, cy + 24);
+  // Vehicle name
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.font = `600 10px ${FONT}`;
+  ctx.fillText(car.name, cx, cy + 42);
+}
+
+function drawDialogue(ctx, g) {
+  if (!g.dialogue) return;
+  const fadeIn = clamp((g.dialogueTimer + 0.1) / 0.25, 0.6, 1);
+  const fadeOut = clamp((8 - g.dialogueTimer) / 0.5, 0, 1);
+  const alpha = Math.min(fadeIn, fadeOut);
+  if (alpha <= 0) return;
+
+  ctx.globalAlpha = alpha;
+  const text = g.dialogue;
+  ctx.font = `600 15px ${FONT}`;
+  const tw = ctx.measureText(text).width;
+  const bw = Math.min(700, tw + 48);
+  const bx = 640 - bw / 2;
+  const by = 620;
+
+  panel(ctx, bx, by, bw, 46, 10);
+
+  // Speaker color: yellow for Marcus, white otherwise
+  const isQuote = text.includes(':');
+  if (isQuote) {
+    const colonIdx = text.indexOf(':');
+    const speaker = text.substring(0, colonIdx);
+    const msg = text.substring(colonIdx + 1).trim();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = PALETTE.accent;
+    ctx.font = `700 14px ${FONT}`;
+    ctx.fillText(speaker, bx + 18, by + 20);
+    ctx.fillStyle = PALETTE.hud;
+    ctx.font = `500 14px ${FONT}`;
+    const speakerW = ctx.measureText(speaker + ': ').width;
+    ctx.fillText(msg, bx + 18 + speakerW - 10, by + 20);
+  } else {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = PALETTE.hud;
+    ctx.font = `600 15px ${FONT}`;
+    ctx.fillText(text, 640, by + 20);
+  }
+
+  // Subtitle underline
+  ctx.fillStyle = PALETTE.accent;
+  ctx.fillRect(bx + 16, by + 32, bw - 32, 2);
+
+  ctx.globalAlpha = 1;
 }
 
 export function drawHUD(ctx, g) {
@@ -187,6 +285,11 @@ export function drawHUD(ctx, g) {
     if (i < g.wanted) {
       ctx.fillStyle = PALETTE.star;
       ctx.fill();
+      // Pulsing glow on active stars
+      ctx.shadowColor = PALETTE.star;
+      ctx.shadowBlur = 6;
+      ctx.fill();
+      ctx.shadowBlur = 0;
     } else {
       ctx.strokeStyle = 'rgba(255,255,255,0.28)';
       ctx.lineWidth = 1.4;
@@ -200,7 +303,8 @@ export function drawHUD(ctx, g) {
   // Objective line, top left.
   if (g.objective) {
     ctx.textAlign = 'left';
-    panel(ctx, 24, 22, Math.min(560, 40 + ctx.measureText(g.objective).width), 52, 8);
+    const objW = Math.min(560, 40 + ctx.measureText(g.objective).width);
+    panel(ctx, 24, 22, objW, 52, 8);
     ctx.fillStyle = PALETTE.accent;
     ctx.font = `800 11px ${FONT}`;
     ctx.fillText('OBJECTIVE', 38, 42);
@@ -232,6 +336,9 @@ export function drawHUD(ctx, g) {
   if (g.combat && !g.player.inCar) {
     drawWeaponHUD(ctx, g.combat, 1256, 680, FONT);
   }
+
+  // Dialogue box at the bottom
+  drawDialogue(ctx, g);
 
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(200,212,220,0.55)';
@@ -303,7 +410,7 @@ export function drawTitle(ctx, g, t) {
 
   ctx.fillStyle = 'rgba(159,176,186,0.7)';
   ctx.font = `500 12px ${FONT}`;
-  ctx.fillText('Blackwater Harbor · v0.1 · original — every pixel drawn by this engine', 92, 692);
+  ctx.fillText('Blackwater Harbor · v1.0 · original — every pixel drawn by this engine', 92, 692);
 }
 
 export function drawPause(ctx, g) {
