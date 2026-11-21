@@ -356,38 +356,7 @@ export function drawScreenAtmosphere(ctx, cssW, cssH, dusk, night, t, rain, hour
     ctx.restore();
   }
 
-  // 2. Optional rain streaks & subtle wet-pavement sheen
-  if (rain) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(18, 32, 48, 0.12)';
-    ctx.fillRect(0, 0, cssW, cssH);
-    ctx.strokeStyle = 'rgba(195, 224, 242, 0.28)';
-    ctx.lineWidth = 1.1;
-    ctx.beginPath();
-    const count = 110;
-    for (let i = 0; i < count; i += 1) {
-      const rx = ((i * 197.3 + t * 240) % (cssW + 120)) - 60;
-      const ry = ((i * 113.7 + t * 880) % (cssH + 80)) - 40;
-      ctx.moveTo(rx, ry);
-      ctx.lineTo(rx - 7, ry + 22);
-    }
-    ctx.stroke();
-
-    ctx.strokeStyle = 'rgba(210, 236, 248, 0.22)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 22; i += 1) {
-      const life = (t * 2.4 + i * 0.37) % 1;
-      const sx = ((i * 331.7 + Math.floor(t * 2.4 + i * 0.37) * 97) % cssW);
-      const sy = ((i * 179.3 + Math.floor(t * 2.4 + i * 0.37) * 53) % cssH);
-      ctx.globalAlpha = (1 - life) * 0.35;
-      ctx.beginPath();
-      ctx.ellipse(sx, sy, 2 + life * 7, 1 + life * 3.5, 0, 0, TAU);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  // 3. Subtle cinematic vignette (gentle by day, deeper at night)
+  // 2. Subtle cinematic vignette (gentle by day, deeper at night)
   const vig = ctx.createRadialGradient(
     cssW * 0.5, cssH * 0.5, Math.min(cssW, cssH) * 0.45,
     cssW * 0.5, cssH * 0.5, Math.hypot(cssW, cssH) * 0.58

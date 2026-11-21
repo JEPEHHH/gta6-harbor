@@ -18,6 +18,7 @@ import { drawCrosshair } from './combat.js';
 import { createSurfaceTextures, drawWater } from './textures.js';
 import { sunShadowVector, drawWorldLighting, drawScreenAtmosphere } from './lighting.js';
 import { drawSkidmarks, drawBulletTracers, drawMuzzleFlash, drawParticles, drawMissionWaypoint } from './effects.js';
+import { drawWetRoadsAndPuddles, drawPuddleReflections, drawRainOverlay } from './weather.js';
 
 /** 0 by day (including 08:10 morning & 17:20 golden hour), 0.56 at 19:40 dusk, 1 at 21:00 night. */
 export function nightFactor(h) {
@@ -430,8 +431,9 @@ export function createRenderer(canvas) {
     // 1. Ground, water, 3D curbs, worn roads, parking bays, drains, manholes, crosswalks, fences
     drawGround(ctx, world, view, t, textures, dusk, night, sun);
 
-    // 2. Smooth rubber skid marks on asphalt
+    // 2. Smooth rubber skid marks & wet road sheen / puddles on asphalt
     drawSkidmarks(ctx, g.skidmarks, view);
+    drawWetRoadsAndPuddles(ctx, g.weatherState, world, view, night, dusk, t);
 
     // 3. Everything with a height sorted back-to-front by its base line
     const drawables = [];
@@ -518,13 +520,15 @@ export function createRenderer(canvas) {
     drawBulletTracers(ctx, g.bullets, view);
     drawMuzzleFlash(ctx, g.player, g.combat);
 
-    // 7. World lighting pass: twilight multiply + warm sodium lamps + neon light spill & lighthouse beam
+    // 7. World lighting pass: twilight multiply + warm sodium lamps + neon spill, lighthouse & wet puddle reflections
     drawWorldLighting(ctx, world, view, night, dusk, t, cam);
+    drawPuddleReflections(ctx, g.weatherState, world, view, night, dusk, t, allVehicles);
 
     ctx.restore();
 
-    // 8. Screen-space colour grading: warm afternoon/golden hour, morning, dusk, rain, vignette
-    drawScreenAtmosphere(ctx, cssW, cssH, dusk, night, t, Boolean(g.rain), g.time);
+    // 8. Screen-space colour grading, vignette & rain weather overlay (wind-slanted drops, edge droplets, thunder)
+    drawScreenAtmosphere(ctx, cssW, cssH, dusk, night, t, false, g.time);
+    drawRainOverlay(ctx, g.weatherState, cssW, cssH, night, dusk, t, cam);
 
     // 9. Crosshair (screen space)
     if (g.screen === 'play' && !g.player.inCar && g.combat && g.combat.weapon !== 'fist' && g.input) {

@@ -676,7 +676,7 @@ export function drawHUD(ctx, g) {
   drawDialogue(ctx, g);
 
   // High-contrast bottom-right key legend in a sleek dark backing pill
-  const legendText = 'WASD move · Shift sprint · F vehicle · R weapon · N rain · P pause';
+  const legendText = 'WASD move · Shift sprint · F vehicle · Q weapon · R rain · P pause';
   ctx.font = `600 11px ${FONT}`;
   const lw = ctx.measureText(legendText).width + 22;
   panel(ctx, 1260 - lw, 691, lw, 22, 7);
@@ -744,7 +744,7 @@ export function drawTitle(ctx, g, t) {
     'Shift — sprint / handbrake',
     'Mouse — aim · Click — fire',
     'F — enter / exit vehicle',
-    'H — horn · V — melee · N — rain',
+    'H — horn · V — melee · Q — weapon · R — rain',
     'P / Esc — pause',
   ];
   for (let i = 0; i < lines.length; i += 1) ctx.fillText(lines[i], 880, 498 + i * 24);

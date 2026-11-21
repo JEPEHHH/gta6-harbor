@@ -13,8 +13,8 @@ export const KEYMAP = {
   continue: ['KeyC'],
   horn: ['KeyH'],
   melee: ['KeyV'],
-  radio: ['KeyR'],
-  rain: ['KeyN'],
+  radio: ['KeyQ'],
+  rain: ['KeyR'],
 };
 
 const HANDLED = new Set(Object.values(KEYMAP).flat());

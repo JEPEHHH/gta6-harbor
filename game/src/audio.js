@@ -261,3 +261,79 @@ export function playWasted() {
     osc.stop(start + 0.4);
   }
 }
+
+// ── Weather audio (rain ambience & distant thunder) ───────────
+
+let rainSrc = null;
+let rainGain = null;
+
+/** Start a soft looping filtered-noise rain shower bed. */
+export function startRainAudio() {
+  if (!ensureCtx()) return;
+  if (rainSrc) return;
+  const dur = 2.0;
+  const bufSize = Math.ceil(ctx.sampleRate * dur);
+  const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < bufSize; i += 1) {
+    const white = Math.random() * 2 - 1;
+    last = (last + 0.08 * white) / 1.08;
+    data[i] = last * 1.9 + white * 0.22;
+  }
+  rainSrc = ctx.createBufferSource();
+  rainSrc.buffer = buf;
+  rainSrc.loop = true;
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 1150;
+  filter.Q.value = 0.65;
+
+  rainGain = ctx.createGain();
+  rainGain.gain.value = 0.035;
+
+  rainSrc.connect(filter);
+  filter.connect(rainGain);
+  rainGain.connect(masterGain);
+  rainSrc.start();
+}
+
+export function stopRainAudio() {
+  if (rainSrc) {
+    try { rainSrc.stop(); } catch { /* ok */ }
+    rainSrc = null;
+  }
+  if (rainGain) {
+    rainGain.disconnect();
+    rainGain = null;
+  }
+}
+
+/** Subtle distant thunder roll synthesized from low-passed noise. */
+export function playThunder() {
+  if (!ensureCtx()) return;
+  const dur = 2.1;
+  const bufSize = Math.ceil(ctx.sampleRate * dur);
+  const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  let acc = 0;
+  for (let i = 0; i < bufSize; i += 1) {
+    const t = i / bufSize;
+    const white = Math.random() * 2 - 1;
+    acc = acc * 0.96 + white * 0.04;
+    const env = Math.min(1, t / 0.08) * ((1 - t) ** 1.65) * (0.75 + 0.25 * Math.sin(t * 28));
+    data[i] = acc * env * 4.5;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 130;
+  const g = ctx.createGain();
+  g.gain.value = 0.22;
+  src.connect(filter);
+  filter.connect(g);
+  g.connect(masterGain);
+  src.start();
+}

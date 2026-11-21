@@ -22,7 +22,9 @@ import {
   resumeAudio, startEngine, updateEngine, stopEngine,
   startSiren, stopSiren, playGunshot, playHorn,
   playFootstep, playSkid, playImpact, playWasted, playPickup,
+  startRainAudio, stopRainAudio, playThunder,
 } from './audio.js';
+import { createWeatherState, setWeatherMode, updateWeather } from './weather.js';
 import { createRandom } from './random.js';
 import {
   createMissionState, startNextMission, startMissionByIndex, currentMission,
@@ -48,6 +50,7 @@ const combat = createCombatState();
 const wantedState = createWantedState();
 const policeState = createPoliceState();
 const missionState = createMissionState();
+const weatherState = createWeatherState(world);
 
 const game = {
   screen: 'title',
@@ -85,14 +88,28 @@ const game = {
   dialogue: null,
   dialogueTimer: 0,
   skidmarks: [],
+  weather: 'dry',
   rain: false,
+  weatherState,
 };
 
 // Audio state tracking
 let engineRunning = false;
 let sirenRunning = false;
+let rainAudioRunning = false;
 let lastSkidTime = 0;
 let footstepCooldown = 0;
+
+function applyWeather(mode, immediate = false) {
+  const next = setWeatherMode(weatherState, mode, immediate);
+  game.weather = next;
+  game.rain = next === 'rain';
+  if (!game.rain && rainAudioRunning) {
+    stopRainAudio();
+    rainAudioRunning = false;
+  }
+  return next;
+}
 
 function announce(message) {
   status.textContent = message;
@@ -129,6 +146,7 @@ function newGame() {
   game.deathScreen = null;
   game.dialogue = null;
   game.screen = 'play';
+  applyWeather('dry', true);
 
   // Reset subsystems
   clearWanted(wantedState);
@@ -191,6 +209,7 @@ function toTitle() {
   // Stop audio
   if (engineRunning) { stopEngine(); engineRunning = false; }
   if (sirenRunning) { stopSiren(); sirenRunning = false; }
+  if (rainAudioRunning) { stopRainAudio(); rainAudioRunning = false; }
 }
 
 function moveMenu(dir) {
@@ -204,6 +223,7 @@ function handleDeath(type) {
   game.deathScreen = type;    // 'wasted' or 'busted'
   if (engineRunning) { stopEngine(); engineRunning = false; }
   if (sirenRunning) { stopSiren(); sirenRunning = false; }
+  if (rainAudioRunning) { stopRainAudio(); rainAudioRunning = false; }
   playWasted();
 }
 
@@ -244,8 +264,8 @@ function handleInput() {
       cycleWeapon(combat);
     }
     if (input.pressed('rain')) {
-      game.rain = !game.rain;
-      notify(game.rain ? 'Harbor rain: ON' : 'Harbor rain: OFF', 2);
+      const next = applyWeather(game.weather === 'rain' ? 'dry' : 'rain', false);
+      notify(next === 'rain' ? 'Weather: Rain' : 'Weather: Dry', 2);
     }
     // Start next mission with C key when between missions
     if (input.pressed('continue') && !missionState.active && !missionState.epilogueDone && missionState.missionJustCompleted) {
@@ -314,11 +334,19 @@ function step(dt) {
   }
   if (game.screen === 'pause') {
     game.saveFlash = Math.max(0, game.saveFlash - dt);
+    if (rainAudioRunning) { stopRainAudio(); rainAudioRunning = false; }
     return;
   }
 
   // ── Day/night ───────────────────────────────────────────────
   game.time = (game.time + (dt * 24) / TIME.daySeconds) % 24;
+
+  // ── Weather (rain, wind slant, speed droplets, subtle thunder) ──
+  const wRes = updateWeather(weatherState, dt, player, game.elapsed);
+  if (wRes.thunderTriggered) {
+    playThunder();
+    camera.shake(1.1, 0.22);
+  }
 
   // ── Traffic lights ──────────────────────────────────────────
   updateLights(roadGraph, dt);
@@ -456,6 +484,14 @@ function step(dt) {
     if (sirenRunning) { stopSiren(); sirenRunning = false; }
   }
 
+  // Rain shower ambience
+  if (game.rain && !game.deathScreen) {
+    if (!rainAudioRunning) { startRainAudio(); rainAudioRunning = true; }
+  } else if (rainAudioRunning) {
+    stopRainAudio();
+    rainAudioRunning = false;
+  }
+
   // ── HUD data ────────────────────────────────────────────────
   const district = world.districtAt(player.x, player.y);
   if (district !== game.district) {
@@ -541,7 +577,7 @@ window.__harbor = {
       game.bullets.length = 0;
       game.notifications.length = 0;
       game.dialogue = null;
-      game.rain = false;
+      applyWeather('dry', true);
       this.teleport(1848, 1538);
       player.angle = -Math.PI * 0.14;
       player.moving = true;
@@ -648,7 +684,7 @@ window.__harbor = {
       game.dialogue = null;
       game.particles.length = 0;
       game.bullets.length = 0;
-      game.rain = false;
+      applyWeather('dry', true);
       this.teleport(2110, 1505);
 
       // Clear previous staged vehicles or parked cars in the immediate player driving corridor
@@ -802,7 +838,7 @@ window.__harbor = {
       game.particles.length = 0;
       game.bullets.length = 0;
       game.notifications.length = 0;
-      game.rain = false;
+      applyWeather('dry', true);
       startMissionByIndex(missionState, 0);
       missionState.stepIndex = 1; // "Collect the package from the warehouse"
       game.objective = currentObjective(missionState);
@@ -857,9 +893,22 @@ window.__harbor = {
     }
     camera.snap(player.x, player.y);
   },
+  setWeather(mode) {
+    const next = applyWeather(mode, true);
+    if (next === 'rain') {
+      const vx = player.inCar ? player.inCar.vx : player.vx;
+      const vy = player.inCar ? player.inCar.vy : player.vy;
+      weatherState.speedFactor = clamp((Math.hypot(vx, vy) - 65) / 225, 0, 1);
+    } else {
+      weatherState.speedFactor = 0;
+    }
+    return next;
+  },
+  getWeather() {
+    return game.weather;
+  },
   setRain(on) {
-    game.rain = Boolean(on);
-    return game.rain;
+    return this.setWeather(on ? 'rain' : 'dry') === 'rain';
   },
   spawnTraffic(n) {
     const extra = spawnTraffic(world, roadGraph, rng, n || 8);
