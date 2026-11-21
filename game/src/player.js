@@ -150,70 +150,101 @@ export function drawPlayer(ctx, p, sun, weapon = 'fist') {
 
   const swing = p.moving ? Math.sin(p.walkPhase) * 4.2 : 0;
   const bob = p.moving ? Math.abs(Math.cos(p.walkPhase)) * 0.9 : 0;
+  const px = Math.round(p.x);
+  const py = Math.round(p.y);
+  const outline = '#080c12';
 
   if (sun) {
-    drawSoftDropShadow(ctx, p.x, p.y + 2, 10, 5.5, sun, 11);
+    drawSoftDropShadow(ctx, px, py + 2, 10, 5.5, sun, 11);
   } else {
-    ctx.fillStyle = 'rgba(16, 20, 28, 0.30)';
+    ctx.fillStyle = 'rgba(16, 20, 28, 0.32)';
     ctx.beginPath();
-    ctx.ellipse(p.x + 3, p.y + 4, 10, 5, 0, 0, TAU);
+    ctx.ellipse(px + 3, py + 4, 10, 5, 0, 0, TAU);
     ctx.fill();
   }
 
   ctx.save();
-  ctx.translate(p.x, p.y - bob);
+  ctx.translate(px, Math.round(py - bob));
   ctx.rotate(p.angle + Math.PI / 2);
 
-  // Legs / trousers
+  // Legs / trousers with crisp dark outline
   ctx.fillStyle = '#242e3b';
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1.3;
   ctx.beginPath();
-  ctx.roundRect(-5.2, 1 + swing * 0.5, 4.2, 7.2, 1.5);
-  ctx.roundRect(1.0, 1 - swing * 0.5, 4.2, 7.2, 1.5);
+  ctx.roundRect(-5.2, -0.5 + swing * 0.55, 4.2, 7.2, 1.5);
+  ctx.roundRect(1.0, -0.5 - swing * 0.55, 4.2, 7.2, 1.5);
   ctx.fill();
+  ctx.stroke();
 
-  // Arms
-  ctx.fillStyle = '#cc9162';
+  // Arms / hands with crisp dark outline
+  ctx.fillStyle = '#d29666';
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1.25;
   ctx.beginPath();
-  ctx.arc(-7.4, -0.8 - swing * 0.55, 2.7, 0, TAU);
-  ctx.arc(7.4, weapon !== 'fist' ? -6.5 : -0.8 + swing * 0.55, 2.7, 0, TAU);
+  ctx.arc(-7.6, -0.8 - swing * 0.55, 2.6, 0, TAU);
   ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(7.6, weapon !== 'fist' ? -6.2 : -0.8 + swing * 0.55, 2.6, 0, TAU);
+  ctx.fill();
+  ctx.stroke();
 
-  // Held weapon (pistol or SMG)
+  // Held weapon (pistol or SMG) with dark outline
   if (weapon === 'pistol' || weapon === 'smg') {
-    ctx.fillStyle = '#1e242c';
     const gunLen = weapon === 'smg' ? 10 : 7;
-    ctx.fillRect(6.2, -7 - gunLen, 2.6, gunLen);
-    ctx.fillStyle = '#6c7682';
-    ctx.fillRect(6.5, -7 - gunLen, 1.2, gunLen * 0.6);
+    ctx.fillStyle = '#1e242c';
+    ctx.fillRect(6.2, -6.5 - gunLen, 2.8, gunLen);
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(6.2, -6.5 - gunLen, 2.8, gunLen);
+    ctx.fillStyle = '#8b96a4';
+    ctx.fillRect(6.7, -6.5 - gunLen + 0.5, 1.2, gunLen * 0.6);
   }
 
-  // Shaded teal harbor jacket
-  const jGrad = ctx.createLinearGradient(-6, -7, 6, 5);
-  jGrad.addColorStop(0, shade('#2fb4bc', 1.22));
-  jGrad.addColorStop(0.55, '#2b9ea6');
+  // Shaded teal harbor jacket shoulders with crisp highlight & dark outline
+  const jGrad = ctx.createLinearGradient(-7, -4.5, 7, 4.5);
+  jGrad.addColorStop(0, shade('#33c2ca', 1.26));
+  jGrad.addColorStop(0.5, '#2ca8b0');
   jGrad.addColorStop(1, shade('#2b9ea6', 0.72));
   ctx.fillStyle = jGrad;
   ctx.beginPath();
-  ctx.roundRect(-6.5, -7.2, 13, 12.2, 4.2);
+  ctx.roundRect(-7.4, -4.4, 14.8, 9.0, 4.2);
   ctx.fill();
-  ctx.fillStyle = 'rgba(255, 252, 240, 0.25)';
-  ctx.fillRect(-5.5, -7, 11, 2.6);
-  ctx.strokeStyle = 'rgba(12, 18, 26, 0.42)';
-  ctx.lineWidth = 0.9;
+  ctx.fillStyle = 'rgba(255, 253, 245, 0.30)';
+  ctx.beginPath();
+  ctx.roundRect(-5.8, -3.5, 11.6, 2.2, 1.1);
+  ctx.fill();
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(-7.4, -4.4, 14.8, 9.0, 4.2);
   ctx.stroke();
 
-  // Head & styled dark hair with rim highlight
-  ctx.fillStyle = '#cc9162';
+  // Distinct head + face rim + styled dark hair with rim highlight & crisp dark outline
+  const headY = -1.6;
+  const headR = 5.0;
+  ctx.fillStyle = '#d29666';
   ctx.beginPath();
-  ctx.arc(0, -6.2, 5.2, 0, TAU);
+  ctx.arc(0, headY, headR, 0, TAU);
   ctx.fill();
-  ctx.fillStyle = '#1f2833';
+  ctx.fillStyle = '#1b232e';
   ctx.beginPath();
-  ctx.arc(0, -7.5, 4.9, Math.PI * 0.92, TAU + 0.25);
+  ctx.arc(0, headY + 0.7, headR - 0.1, -Math.PI * 0.16, Math.PI * 1.16);
+  ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
   ctx.beginPath();
-  ctx.arc(-1.5, -8.8, 1.5, 0, TAU);
+  ctx.ellipse(0, headY + 1.0, headR * 0.92, headR * 0.78, 0, 0, TAU);
   ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+  ctx.beginPath();
+  ctx.arc(-1.5, headY + 0.2, 1.6, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1.45;
+  ctx.beginPath();
+  ctx.arc(0, headY, headR, 0, TAU);
+  ctx.stroke();
+
   ctx.restore();
 }

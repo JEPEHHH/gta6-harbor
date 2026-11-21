@@ -252,39 +252,49 @@ function drawLeashedDog(ctx, ped, sun, t) {
   ctx.quadraticCurveTo((handX + dogX) * 0.5, (handY + dogY) * 0.5 + 2.5, dogX - fx * 2, dogY - fy * 2);
   ctx.stroke();
 
-  // Dog body, head, ears & wagging tail
-  ctx.translate(dogX, dogY);
+  // Dog body, head, ears & wagging tail with crisp dark outline
+  ctx.translate(Math.round(dogX), Math.round(dogY));
   ctx.rotate(ped.angle);
   const coat = ped.dogColor || '#b57842';
   const tailWag = Math.sin(t * 14 + ped.id) * 2.4;
   // Tail
-  ctx.strokeStyle = coat;
-  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = '#090d14';
+  ctx.lineWidth = 2.6;
   ctx.beginPath();
   ctx.moveTo(-4.5, 0);
   ctx.lineTo(-8.2, tailWag);
+  ctx.stroke();
+  ctx.strokeStyle = coat;
+  ctx.lineWidth = 1.4;
   ctx.stroke();
   // Torso
   ctx.fillStyle = coat;
   ctx.beginPath();
   ctx.roundRect(-5, -2.5, 9.2, 5.0, 2.2);
   ctx.fill();
+  ctx.strokeStyle = '#090d14';
+  ctx.lineWidth = 1.1;
+  ctx.stroke();
   // Red collar
-  ctx.fillStyle = '#d43c32';
+  ctx.fillStyle = '#e03c32';
   ctx.fillRect(2.2, -2.4, 1.5, 4.8);
   // Head & snout
   ctx.fillStyle = shade(coat, 1.12);
   ctx.beginPath();
-  ctx.arc(5.2, 0, 2.6, 0, TAU);
+  ctx.arc(5.2, 0, 2.7, 0, TAU);
   ctx.fill();
+  ctx.strokeStyle = '#090d14';
+  ctx.lineWidth = 1.05;
+  ctx.stroke();
   // Floppy ears
-  ctx.fillStyle = shade(coat, 0.72);
+  ctx.fillStyle = shade(coat, 0.70);
   ctx.fillRect(3.6, -3.2, 2.2, 1.6);
   ctx.fillRect(3.6, 1.6, 2.2, 1.6);
   ctx.restore();
 }
 
-/** Draw a shaded pedestrian figure with full walk cycle, accessories & grounded shadow. */
+/** Draw a crisp top-down pedestrian with grounded contact shadow, clear shoulder/head/hair read,
+ *  and dark outline so figures never blur into the asphalt or sidewalks. */
 export function drawPed(ctx, ped, sun, t = 0) {
   if (!ped.alive) return;
 
@@ -295,119 +305,176 @@ export function drawPed(ctx, ped, sun, t = 0) {
   const sp = Math.hypot(ped.vx, ped.vy);
   const moving = sp > 6;
   const isJogger = ped.role === 'jogger';
-  const strideAmp = isJogger ? 5.6 : 4.2;
+  const strideAmp = isJogger ? 5.2 : 3.8;
   const stride = moving ? Math.sin(ped.walkPhase) * strideAmp : 0;
-  const bob = moving ? Math.abs(Math.cos(ped.walkPhase)) * (isJogger ? 1.5 : 0.9) : 0;
-  const twist = moving ? Math.sin(ped.walkPhase) * (isJogger ? 0.14 : 0.08) : 0;
+  const bob = moving ? Math.abs(Math.cos(ped.walkPhase)) * (isJogger ? 1.4 : 0.8) : 0;
+  const twist = moving ? Math.sin(ped.walkPhase) * (isJogger ? 0.12 : 0.07) : 0;
   const skin = ped.skin || '#c98d5f';
+  const px = Math.round(ped.x);
+  const py = Math.round(ped.y);
+  const outline = '#090d14';
 
-  // Soft contact + directional sun shadow on pavement
+  // Soft contact + directional sun shadow on pavement (preserved)
   if (sun) {
-    drawSoftDropShadow(ctx, ped.x, ped.y + 2, 7.6, 4.6, sun, 11);
+    drawSoftDropShadow(ctx, px, py + 2, 7.6, 4.6, sun, 11);
   } else {
-    ctx.fillStyle = 'rgba(14, 18, 28, 0.28)';
+    ctx.fillStyle = 'rgba(14, 18, 28, 0.30)';
     ctx.beginPath();
-    ctx.ellipse(ped.x + 2, ped.y + 3, 7.2, 4.2, 0, 0, TAU);
+    ctx.ellipse(px + 2, py + 3, 7.2, 4.2, 0, 0, TAU);
     ctx.fill();
   }
 
   ctx.save();
-  ctx.translate(ped.x, ped.y - bob);
+  ctx.translate(px, Math.round(py - bob));
   ctx.rotate(ped.angle + Math.PI / 2);
 
-  // Walking legs + distinct shoes stepping forward & back
-  const leftFootY = 0.5 + stride * 0.75;
-  const rightFootY = 0.5 - stride * 0.75;
+  // 1. Stepping legs & shoes underneath shoulders (with crisp dark outline)
+  const leftFootY = -0.5 + stride * 0.85;
+  const rightFootY = -0.5 - stride * 0.85;
   ctx.fillStyle = ped.pants || '#252a36';
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.roundRect(-4.4, leftFootY, 3.4, 6.4, 1.4);
-  ctx.roundRect(1.0, rightFootY, 3.4, 6.4, 1.4);
+  ctx.roundRect(-4.6, leftFootY, 3.4, 5.8, 1.4);
+  ctx.roundRect(1.2, rightFootY, 3.4, 5.8, 1.4);
   ctx.fill();
+  ctx.stroke();
+
   // Shoes (bright sneakers on joggers)
-  ctx.fillStyle = isJogger ? '#f2f4f8' : '#1b1d22';
+  ctx.fillStyle = isJogger ? '#f4f6fa' : '#1b1e25';
   ctx.beginPath();
-  ctx.roundRect(-4.6, leftFootY + (stride > 0 ? 4.4 : 0), 3.6, 2.4, 1);
-  ctx.roundRect(1.0, rightFootY + (stride < 0 ? 4.4 : 0), 3.6, 2.4, 1);
+  ctx.roundRect(-4.6, leftFootY + (stride > 0 ? 3.8 : 0), 3.4, 2.3, 1);
+  ctx.roundRect(1.2, rightFootY + (stride < 0 ? 3.8 : 0), 3.4, 2.3, 1);
   ctx.fill();
+  ctx.stroke();
 
   // Subtle torso shoulder twist while striding
   ctx.rotate(twist);
 
-  // Swinging arms (sleeves + hands)
-  const armSwing = stride * (isJogger ? 0.85 : 0.68);
-  ctx.strokeStyle = isJogger ? skin : shade(ped.shirt, 0.9);
-  ctx.lineWidth = 2.6;
+  // 2. Swinging arms & hands with dark outline
+  const armSwing = stride * (isJogger ? 0.85 : 0.65);
   ctx.lineCap = 'round';
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 4.6;
   ctx.beginPath();
-  ctx.moveTo(-5.2, -1.8); ctx.lineTo(-6.6, -1.2 - armSwing);
-  ctx.moveTo(5.2, -1.8); ctx.lineTo(6.6, -1.2 + armSwing);
+  ctx.moveTo(-5.2, -0.2); ctx.lineTo(-6.8, -0.6 - armSwing);
+  ctx.moveTo(5.2, -0.2); ctx.lineTo(6.8, -0.6 + armSwing);
+  ctx.stroke();
+  ctx.strokeStyle = isJogger ? skin : shade(ped.shirt, 0.92);
+  ctx.lineWidth = 2.4;
   ctx.stroke();
 
   ctx.fillStyle = skin;
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1.1;
   ctx.beginPath();
-  ctx.arc(-6.6, -1.2 - armSwing, 2.0, 0, TAU);
-  ctx.arc(6.6, -1.2 + armSwing, 2.0, 0, TAU);
+  ctx.arc(-6.8, -0.6 - armSwing, 1.9, 0, TAU);
   ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(6.8, -0.6 + armSwing, 1.9, 0, TAU);
+  ctx.fill();
+  ctx.stroke();
 
   // Optional tote bag carried on right side
   if (ped.bag === 'tote') {
-    ctx.fillStyle = '#c49658';
-    ctx.fillRect(6.2, -2.5 + armSwing, 3.2, 5.2);
+    ctx.fillStyle = '#cf9e5c';
+    ctx.fillRect(6.4, -2.0 + armSwing, 3.4, 5.2);
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 1.0;
+    ctx.strokeRect(6.4, -2.0 + armSwing, 3.4, 5.2);
   }
 
-  // Optional backpack worn behind shoulders
+  // Optional backpack worn cleanly behind shoulders
   if (ped.bag === 'backpack') {
-    ctx.fillStyle = '#364452';
+    ctx.fillStyle = '#3d4f62';
     ctx.beginPath();
-    ctx.roundRect(-4.2, 2.0, 8.4, 4.4, 1.8);
+    ctx.roundRect(-4.4, 1.8, 8.8, 4.4, 1.8);
     ctx.fill();
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 1.15;
+    ctx.stroke();
   }
 
-  // Shaded torso / shirt with directional shoulder highlight
-  const shirtGrad = ctx.createLinearGradient(-5, -6, 5, 4);
-  shirtGrad.addColorStop(0, shade(ped.shirt, 1.24));
-  shirtGrad.addColorStop(0.55, ped.shirt);
-  shirtGrad.addColorStop(1, shade(ped.shirt, 0.72));
+  // 3. Clear top-down shoulder silhouette with sunlit ridge highlight & dark outline
+  const shirtGrad = ctx.createLinearGradient(-6, -4, 6, 4);
+  shirtGrad.addColorStop(0, shade(ped.shirt, 1.32));
+  shirtGrad.addColorStop(0.5, ped.shirt);
+  shirtGrad.addColorStop(1, shade(ped.shirt, 0.74));
   ctx.fillStyle = shirtGrad;
   ctx.beginPath();
-  ctx.roundRect(-5.6, -6.0, 11.2, 9.8, 3.6);
+  ctx.roundRect(-6.4, -3.8, 12.8, 7.6, 3.6);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(15, 20, 28, 0.36)';
-  ctx.lineWidth = 0.8;
+
+  // Subtle sunlit shoulder highlight bar separating shoulders cleanly from ground & head
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.24)';
+  ctx.beginPath();
+  ctx.roundRect(-5.0, -3.0, 10.0, 2.0, 1.0);
+  ctx.fill();
+
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.roundRect(-6.4, -3.8, 12.8, 7.6, 3.6);
   ctx.stroke();
 
-  // Head with subtle face lighting
+  // 4. Distinct centered-forward head + face rim + hair/hat read with crisp dark outline
+  const headY = -1.4;
+  const headR = 4.3;
+  // Base head (warm skin showing cleanly along the forward-facing brow)
   ctx.fillStyle = skin;
   ctx.beginPath();
-  ctx.arc(0, -5.2, 4.2, 0, TAU);
+  ctx.arc(0, headY, headR, 0, TAU);
   ctx.fill();
 
-  // Hair cap or baseball cap / jogger headband
+  // Hair cap or baseball cap covering crown & back of head
   if (ped.hat) {
+    // Cap brim facing forward (-y)
+    ctx.fillStyle = shade(ped.hat, 0.80);
+    ctx.beginPath();
+    ctx.roundRect(-3.2, headY - headR - 2.2, 6.4, 2.8, 1.2);
+    ctx.fill();
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 1.1;
+    ctx.stroke();
+    // Cap dome
     ctx.fillStyle = ped.hat;
     ctx.beginPath();
-    ctx.arc(0, -5.6, 4.3, 0, TAU);
+    ctx.arc(0, headY + 0.3, headR, 0, TAU);
     ctx.fill();
-    // Cap brim facing forward
-    ctx.fillStyle = shade(ped.hat, 0.82);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
     ctx.beginPath();
-    ctx.roundRect(-3.2, -10.8, 6.4, 2.4, 1.2);
+    ctx.arc(-1.1, headY - 0.8, 1.4, 0, TAU);
     ctx.fill();
   } else {
+    // Distinct hair mass leaving a clear forward skin brow read (-y) so facing direction & head read cleanly
     ctx.fillStyle = ped.hair;
     ctx.beginPath();
-    ctx.arc(0, -6.2, 4.0, Math.PI * 0.92, TAU + 0.25);
+    ctx.arc(0, headY + 0.9, headR - 0.15, -Math.PI * 0.12, Math.PI * 1.12);
+    ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+    // Crown volume & crisp hair highlight crescent so hair reads clearly even on dark hair tones
+    ctx.fillStyle = ped.hair;
     ctx.beginPath();
-    ctx.arc(-1.2, -7.2, 1.4, 0, TAU);
+    ctx.ellipse(0, headY + 1.1, headR * 0.90, headR * 0.72, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.34)';
+    ctx.beginPath();
+    ctx.arc(-1.2, headY + 0.4, 1.45, 0, TAU);
     ctx.fill();
     if (isJogger) {
-      // Bright athletic headband
+      // Bright athletic headband across forehead
       ctx.fillStyle = '#f6f8fa';
-      ctx.fillRect(-3.8, -7.6, 7.6, 1.5);
+      ctx.fillRect(-3.7, headY - 2.4, 7.4, 1.6);
     }
   }
+
+  // Crisp dark outline around head silhouette so head separates from shoulders & asphalt
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1.35;
+  ctx.beginPath();
+  ctx.arc(0, headY, headR, 0, TAU);
+  ctx.stroke();
 
   ctx.restore();
 }

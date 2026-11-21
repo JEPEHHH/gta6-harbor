@@ -360,11 +360,11 @@ async function capture() {
     let size = statSync(outPath).size;
     console.log(`Raw render size: ${size} bytes (${(size / 1024).toFixed(1)} KiB)`);
 
-    // Quantize with adaptive palette to guarantee <= 255 KiB safety margin
-    size = quantizePngFile(outPath, 260000);
+    // Quantize with adaptive palette to guarantee < 250 KiB safety margin
+    size = quantizePngFile(outPath, 255000);
     console.log(`Saved ${t.file}: ${size} bytes (${(size / 1024).toFixed(1)} KiB) — ${t.desc}`);
-    if (size > 261120) {
-      throw new Error(`Screenshot ${t.file} exceeds 255 KiB safety limit: ${size} bytes`);
+    if (size > 256000) {
+      throw new Error(`Screenshot ${t.file} exceeds 250 KiB safety margin: ${size} bytes`);
     }
   }
 

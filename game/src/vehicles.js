@@ -243,40 +243,52 @@ export function vehicleCollision(a, b) {
 
 function drawWheel(ctx, wx, wy, steerAngle, heavy = false) {
   ctx.save();
-  ctx.translate(wx, wy);
+  ctx.translate(Math.round(wx * 2) / 2, Math.round(wy * 2) / 2);
   if (steerAngle) ctx.rotate(steerAngle);
-  const wl = heavy ? 8.6 : 7.8;
-  const wt = heavy ? 4.2 : 3.8;
-  ctx.fillStyle = '#14161b';
+  const wl = heavy ? 9 : 8;
+  const wt = heavy ? 4.4 : 4;
+  const r = 1.4;
+  // Deep rubber tyre with crisp dark outline
+  ctx.fillStyle = '#0e1117';
   ctx.beginPath();
-  ctx.roundRect(-wl * 0.5, -wt * 0.5, wl, wt, 1.3);
+  ctx.roundRect(-wl * 0.5, -wt * 0.5, wl, wt, r);
   ctx.fill();
-  ctx.fillStyle = '#5c6370';
-  ctx.fillRect(-1.8, -wt * 0.32, 3.6, wt * 0.64);
+  ctx.strokeStyle = '#04060a';
+  ctx.lineWidth = 1.1;
+  ctx.stroke();
+  // Subtle tread / sidewall rim highlight so wheel reads distinct from asphalt
+  ctx.fillStyle = '#363e4d';
+  ctx.fillRect(-wl * 0.36, -wt * 0.34, wl * 0.72, wt * 0.68);
+  // Bright alloy hub cap accent
+  ctx.fillStyle = '#a8b4c4';
+  ctx.fillRect(-1.8, -wt * 0.28, 3.6, wt * 0.56);
   ctx.restore();
 }
 
-/** Draw one vehicle with grounded contact shadow, steering tyres, subtle cornering body roll,
- *  shaded glossy body, brake lights, blinking indicators and night headlight cones. */
+/** Draw one vehicle with grounded contact shadow, pixel-snapped crisp rounded body,
+ *  thin dark outline, distinct wheels, clear windshield & roof highlight, and lights. */
 export function drawVehicle(ctx, v, night, sun, dusk = 0, t = 0) {
-  const hw = v.w * 0.5;
-  const hh = v.h * 0.5;
+  const vx = Math.round(v.x);
+  const vy = Math.round(v.y);
+  const w = Math.round(v.w);
+  const h = Math.round(v.h);
+  const hw = w * 0.5;
+  const hh = h * 0.5;
   const speedRatio = clamp(Math.hypot(v.vx, v.vy) / 260, 0, 1);
-  const bounce = (v.driver ? Math.sin((v.bouncePhase || 0) * 1.4 + v.id) * (0.28 + speedRatio * 0.45) : 0);
-  const scaleBounce = 1 + bounce * 0.020;
+  const bounce = (v.driver ? Math.sin((v.bouncePhase || 0) * 1.4 + v.id) * (0.24 + speedRatio * 0.36) : 0);
   const roll = clamp(v.bodyRoll || 0, -1, 1);
-  const rollBodyY = roll * 1.4;
-  const rollRoofY = roll * 2.4;
+  const rollBodyY = Math.round((roll * 1.1 + bounce * 0.3) * 2) / 2;
+  const rollRoofY = Math.round((roll * 1.8) * 2) / 2;
   const lift = v.type === 'bus' ? 22 : v.type === 'truck' ? 20 : v.type === 'van' ? 17 : 13;
 
   // 1. Grounded contact shadow + directional sun shadow following the chassis
-  drawVehicleShadow(ctx, v.x, v.y, v.w, v.h, v.angle, sun, lift);
+  drawVehicleShadow(ctx, vx, vy, w, h, v.angle, sun, lift);
 
   // 2. Volumetric dual headlight cones at dusk & night (drawn beneath/ahead of hood)
   const lightPower = clamp(night * 1.1 + dusk * 0.68, 0, 1);
   if (v.headlights && lightPower > 0.16 && (v.driver || v._headlightsOn)) {
     ctx.save();
-    ctx.translate(v.x, v.y);
+    ctx.translate(vx, vy);
     ctx.rotate(v.angle);
     ctx.globalCompositeOperation = 'lighter';
     for (const side of [-1, 1]) {
@@ -299,104 +311,141 @@ export function drawVehicle(ctx, v, night, sun, dusk = 0, t = 0) {
     ctx.restore();
   }
 
-  // 3. Wheels (planted on the road, front pair steers visibly)
+  // 3. Distinct wheels planted on the road (front pair steers visibly)
   ctx.save();
-  ctx.translate(v.x, v.y);
+  ctx.translate(vx, vy);
   ctx.rotate(v.angle);
 
   const steerVis = clamp((v.steer || 0) * 0.48, -0.5, 0.5);
   const heavy = v.type === 'bus' || v.type === 'truck';
-  const frontAxle = v.type === 'bus' ? hw * 0.64 : hw * 0.56;
-  const rearAxle = v.type === 'bus' ? -hw * 0.60 : -hw * 0.54;
-  drawWheel(ctx, frontAxle, -hh - 0.8, steerVis, heavy);
-  drawWheel(ctx, frontAxle, hh + 0.8, steerVis, heavy);
-  drawWheel(ctx, rearAxle, -hh - 0.8, 0, heavy);
-  drawWheel(ctx, rearAxle, hh + 0.8, 0, heavy);
+  const frontAxle = Math.round(v.type === 'bus' ? hw * 0.64 : hw * 0.56);
+  const rearAxle = Math.round(v.type === 'bus' ? -hw * 0.60 : -hw * 0.54);
+  const wheelOffY = hh + 1.1;
+  drawWheel(ctx, frontAxle, -wheelOffY, steerVis, heavy);
+  drawWheel(ctx, frontAxle, wheelOffY, steerVis, heavy);
+  drawWheel(ctx, rearAxle, -wheelOffY, 0, heavy);
+  drawWheel(ctx, rearAxle, wheelOffY, 0, heavy);
 
-  // 4. Chassis body (shifts subtly with cornering body roll + suspension bounce)
-  ctx.translate(0, rollBodyY + bounce * 0.35);
-  ctx.scale(scaleBounce, scaleBounce);
+  // 4. Pixel-snapped rounded chassis body (no fractional scale blur)
+  ctx.translate(0, rollBodyY);
 
-  // Lower dark bumper / skirt outline
-  ctx.fillStyle = '#1b1f27';
-  ctx.beginPath();
-  ctx.roundRect(-hw - 0.8, -hh - 0.5, v.w + 1.6, v.h + 1, v.type === 'bus' ? 3.5 : 5);
-  ctx.fill();
-
-  // Shaded metallic body gradient (subtle highlight shift with body roll)
+  const bodyR = v.type === 'bus' ? 3 : 4;
   const baseColor = v.damaged ? '#696d74' : v.color;
   const bodyGrad = ctx.createLinearGradient(0, -hh, 0, hh);
-  bodyGrad.addColorStop(0, shade(baseColor, 1.24 - roll * 0.08));
-  bodyGrad.addColorStop(0.45, baseColor);
-  bodyGrad.addColorStop(1, shade(baseColor, 0.70 + roll * 0.08));
+  bodyGrad.addColorStop(0, shade(baseColor, 1.28 - roll * 0.06));
+  bodyGrad.addColorStop(0.46, baseColor);
+  bodyGrad.addColorStop(1, shade(baseColor, 0.72 + roll * 0.06));
+
   ctx.fillStyle = bodyGrad;
   ctx.beginPath();
-  ctx.roundRect(-hw, -hh, v.w, v.h, v.type === 'bus' ? 3 : 4.5);
+  ctx.roundRect(-hw, -hh, w, h, bodyR);
   ctx.fill();
 
-  // Crisp sunlit flank specular ribbon
-  ctx.fillStyle = 'rgba(255, 252, 244, 0.28)';
+  // Crisp wheel-arch cutouts along flanks so wheels read unmistakably
+  ctx.fillStyle = 'rgba(8, 11, 16, 0.72)';
+  for (const ax of [frontAxle, rearAxle]) {
+    ctx.fillRect(ax - 3.5, -hh, 7, 1.3);
+    ctx.fillRect(ax - 3.5, hh - 1.3, 7, 1.3);
+  }
+
+  // Crisp sunlit upper flank specular edge
+  ctx.fillStyle = 'rgba(255, 253, 246, 0.36)';
   ctx.beginPath();
-  ctx.roundRect(-hw + 3, -hh + 1.4, v.w - 6, 2.0, 1);
+  ctx.roundRect(-hw + 3, -hh + 1, w - 6, 1.8, 0.9);
   ctx.fill();
 
-  // 5. Type-specific upper silhouettes (roof shifts slightly more with body roll for 2.5D lean)
+  // Subtle hood / trunk panel seam lines for crisp miniature detail
+  if (v.type !== 'bus' && v.type !== 'truck') {
+    ctx.strokeStyle = 'rgba(10, 14, 20, 0.32)';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(hw - 4, -hh + 2.5); ctx.lineTo(hw - 4, hh - 2.5);
+    ctx.stroke();
+  }
+
+  // 5. Type-specific upper silhouettes: clear windshields + crisp roof highlights
   if (v.type === 'bus') {
     // Coastal teal & amber transit livery stripes along flanks
     ctx.fillStyle = '#1f8f96';
-    ctx.fillRect(-hw + 2, -hh + 1.2, v.w - 4, 2.6);
-    ctx.fillRect(-hw + 2, hh - 3.8, v.w - 4, 2.6);
+    ctx.fillRect(-hw + 2, -hh + 1.2, w - 4, 2.5);
+    ctx.fillRect(-hw + 2, hh - 3.7, w - 4, 2.5);
     ctx.fillStyle = '#f0a63b';
-    ctx.fillRect(-hw + 4, -hh + 3.8, v.w - 10, 1.1);
-    ctx.fillRect(-hw + 4, hh - 4.9, v.w - 10, 1.1);
+    ctx.fillRect(-hw + 4, -hh + 3.7, w - 10, 1.1);
+    ctx.fillRect(-hw + 4, hh - 4.8, w - 10, 1.1);
 
-    // Panoramic front windshield & rear glass
-    ctx.fillStyle = '#152736';
+    // Panoramic front windshield with dark frame & bright sky reflection
+    ctx.fillStyle = '#0e2234';
     ctx.beginPath();
-    ctx.roundRect(hw - 7.5, -hh + 1.8, 6.2, v.h - 3.6, 1.8);
+    ctx.roundRect(hw - 8, -hh + 2, 6.5, h - 4, 1.5);
     ctx.fill();
-    ctx.fillStyle = 'rgba(175, 224, 245, 0.36)';
-    ctx.fillRect(hw - 4.2, -hh + 2.5, 2.0, v.h - 5);
+    ctx.strokeStyle = '#060a10';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(205, 240, 255, 0.72)';
+    ctx.fillRect(hw - 5, -hh + 2.8, 2.2, h - 5.6);
 
-    // Elevated white bus roof with subtle body-roll shift & twin rooftop AC pods
+    // Elevated white bus roof with crisp dark seam & highlight
     ctx.save();
     ctx.translate(0, rollRoofY * 0.45);
-    ctx.fillStyle = '#f2f6f8';
+    ctx.fillStyle = '#f4f8fa';
     ctx.beginPath();
-    ctx.roundRect(-hw + 3.5, -hh + 3.2, v.w - 11.5, v.h - 6.4, 2.2);
+    ctx.roundRect(-hw + 3, -hh + 3, w - 12, h - 6, 2);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(40, 52, 66, 0.25)';
-    ctx.lineWidth = 0.8;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.62)';
+    ctx.fillRect(-hw + 4, -hh + 3.5, w - 14, 2);
+    ctx.strokeStyle = 'rgba(12, 18, 28, 0.65)';
+    ctx.lineWidth = 1;
     ctx.stroke();
-    // Dual rooftop HVAC pods + emergency hatch
+    // Dual rooftop HVAC pods + destination header
     ctx.fillStyle = '#c8d2d8';
     ctx.fillRect(-10, -5, 11, 10);
     ctx.fillRect(6, -5, 10, 10);
-    ctx.fillStyle = '#7c8994';
-    ctx.fillRect(-8, -3.2, 7, 6.4);
-    ctx.fillRect(8, -3.2, 6, 6.4);
-    ctx.fillStyle = '#ffaa3b';
-    ctx.fillRect(hw - 9.5, -3.5, 2.2, 7); // destination board header
+    ctx.strokeStyle = 'rgba(18, 24, 34, 0.55)';
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(-10, -5, 11, 10);
+    ctx.strokeRect(6, -5, 10, 10);
+    ctx.fillStyle = '#73808c';
+    ctx.fillRect(-8, -3, 7, 6);
+    ctx.fillRect(8, -3, 6, 6);
+    ctx.fillStyle = '#ffae3b';
+    ctx.fillRect(hw - 10, -3.5, 2.2, 7);
     ctx.restore();
   } else if (v.type === 'van') {
-    // Front windshield
-    ctx.fillStyle = '#152736';
+    // Crisp front windshield with diagonal sky reflection
+    ctx.fillStyle = '#0e2234';
     ctx.beginPath();
-    ctx.roundRect(hw * 0.26, -hh * 0.78, hw * 0.50, v.h * 0.78, 2.2);
+    ctx.roundRect(Math.round(hw * 0.24), Math.round(-hh * 0.78), Math.round(hw * 0.52), Math.round(h * 0.78), 2);
     ctx.fill();
-    ctx.fillStyle = 'rgba(175, 224, 245, 0.36)';
-    ctx.fillRect(hw * 0.56, -hh * 0.70, 2.2, v.h * 0.70);
+    ctx.strokeStyle = '#060a10';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(205, 240, 255, 0.74)';
+    ctx.beginPath();
+    ctx.moveTo(hw * 0.52, -hh * 0.70);
+    ctx.lineTo(hw * 0.68, -hh * 0.70);
+    ctx.lineTo(hw * 0.58, hh * 0.70);
+    ctx.lineTo(hw * 0.42, hh * 0.70);
+    ctx.closePath();
+    ctx.fill();
 
-    // Extended boxy van roof with roof rack bars & rear door seam
+    // Boxy van roof with crisp roof highlight & dark seam
     ctx.save();
     ctx.translate(0, rollRoofY * 0.45);
-    ctx.fillStyle = shade(baseColor, 1.12);
+    const roofGrad = ctx.createLinearGradient(0, -hh * 0.78, 0, hh * 0.78);
+    roofGrad.addColorStop(0, shade(baseColor, 1.28));
+    roofGrad.addColorStop(1, shade(baseColor, 1.04));
+    ctx.fillStyle = roofGrad;
     ctx.beginPath();
-    ctx.roundRect(-hw + 2.5, -hh * 0.78, v.w * 0.68, v.h * 0.78, 2.5);
+    ctx.roundRect(-hw + 2.5, Math.round(-hh * 0.78), Math.round(w * 0.66), Math.round(h * 0.78), 2);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(30, 38, 48, 0.35)';
-    ctx.lineWidth = 1.1;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.46)';
+    ctx.fillRect(-hw + 4, Math.round(-hh * 0.72), Math.round(w * 0.62), 1.8);
+    ctx.strokeStyle = 'rgba(10, 14, 22, 0.68)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
     // Utility roof rack rails
+    ctx.strokeStyle = 'rgba(22, 28, 38, 0.55)';
+    ctx.lineWidth = 1.1;
     ctx.beginPath();
     ctx.moveTo(-hw + 5, -hh * 0.56); ctx.lineTo(hw * 0.22, -hh * 0.56);
     ctx.moveTo(-hw + 5, hh * 0.56); ctx.lineTo(hw * 0.22, hh * 0.56);
@@ -409,146 +458,202 @@ export function drawVehicle(ctx, v, night, sun, dusk = 0, t = 0) {
     ctx.stroke();
     ctx.restore();
   } else if (v.type === 'pickup') {
-    // Open recessed dark pickup cargo bed with ribbed liner & occasional cargo box
-    ctx.fillStyle = '#2d323a';
+    // Open recessed dark pickup cargo bed with ribbed liner & crisp border
+    ctx.fillStyle = '#252a32';
     ctx.beginPath();
-    ctx.roundRect(-hw + 2.2, -hh + 2.2, v.w * 0.44, v.h - 4.4, 1.5);
+    ctx.roundRect(-hw + 2, -hh + 2, Math.round(w * 0.44), h - 4, 1.5);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.strokeStyle = '#090d14';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
     ctx.lineWidth = 0.9;
-    for (let rx = -hw + 5; rx < -hw + v.w * 0.44; rx += 4.2) {
+    for (let rx = -hw + 5; rx < -hw + w * 0.44; rx += 4) {
       ctx.beginPath();
       ctx.moveTo(rx, -hh + 2.8); ctx.lineTo(rx, hh - 2.8);
       ctx.stroke();
     }
     // Toolbox / cargo crate in bed
-    ctx.fillStyle = v.id % 2 === 0 ? '#a88050' : '#bfc6cc';
-    ctx.fillRect(-hw + v.w * 0.32, -hh + 3.2, 5.5, v.h - 6.4);
+    ctx.fillStyle = v.id % 2 === 0 ? '#b28652' : '#c6cdd4';
+    ctx.fillRect(-hw + Math.round(w * 0.31), -hh + 3, 5.5, h - 6);
+    ctx.strokeStyle = 'rgba(10, 14, 20, 0.65)';
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(-hw + Math.round(w * 0.31), -hh + 3, 5.5, h - 6);
 
-    // Pickup cab greenhouse & roof
-    ctx.fillStyle = '#152736';
+    // Pickup cab windshield & roof with clear highlight
+    ctx.fillStyle = '#0e2234';
     ctx.beginPath();
-    ctx.roundRect(-hw + v.w * 0.48, -hh * 0.76, v.w * 0.30, v.h * 0.76, 2.2);
+    ctx.roundRect(-hw + Math.round(w * 0.48), Math.round(-hh * 0.78), Math.round(w * 0.30), Math.round(h * 0.78), 2);
     ctx.fill();
-    ctx.fillStyle = 'rgba(175, 224, 245, 0.36)';
-    ctx.fillRect(hw * 0.40, -hh * 0.68, 2.2, v.h * 0.68);
+    ctx.strokeStyle = '#060a10';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(205, 240, 255, 0.74)';
+    ctx.fillRect(Math.round(hw * 0.38), Math.round(-hh * 0.68), 2.4, Math.round(h * 0.68));
     ctx.save();
     ctx.translate(0, rollRoofY * 0.45);
-    ctx.fillStyle = shade(baseColor, 1.15);
+    ctx.fillStyle = shade(baseColor, 1.24);
     ctx.beginPath();
-    ctx.roundRect(-hw + v.w * 0.51, -hh * 0.64, v.w * 0.16, v.h * 0.64, 1.8);
+    ctx.roundRect(-hw + Math.round(w * 0.50), Math.round(-hh * 0.66), Math.round(w * 0.17), Math.round(h * 0.66), 1.6);
     ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+    ctx.fillRect(-hw + Math.round(w * 0.51), Math.round(-hh * 0.60), Math.round(w * 0.15), 1.6);
+    ctx.strokeStyle = 'rgba(10, 14, 22, 0.72)';
+    ctx.lineWidth = 0.9;
+    ctx.stroke();
     ctx.restore();
   } else if (v.type === 'truck') {
-    // Box/flatbed cargo rear with ribbed panels
+    // Box cargo rear with ribbed panels, highlight & crisp outline
     ctx.save();
     ctx.translate(0, rollRoofY * 0.45);
-    ctx.fillStyle = '#d6d4cc';
+    ctx.fillStyle = '#dbd8cf';
     ctx.beginPath();
-    ctx.roundRect(-hw + 2.0, -hh + 1.5, v.w * 0.62, v.h - 3.0, 1.8);
+    ctx.roundRect(-hw + 2, -hh + 1.5, Math.round(w * 0.62), h - 3, 1.5);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(42, 48, 56, 0.25)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.48)';
+    ctx.fillRect(-hw + 3, -hh + 2, Math.round(w * 0.60), 2);
+    ctx.strokeStyle = 'rgba(12, 16, 24, 0.72)';
     ctx.lineWidth = 1;
-    for (let rx = -hw + 7; rx < -hw + v.w * 0.62; rx += 6) {
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(42, 48, 56, 0.28)';
+    ctx.lineWidth = 1;
+    for (let rx = -hw + 7; rx < -hw + w * 0.62; rx += 6) {
       ctx.beginPath();
       ctx.moveTo(rx, -hh + 2); ctx.lineTo(rx, hh - 2);
       ctx.stroke();
     }
     ctx.restore();
     // Cab windshield
-    ctx.fillStyle = '#182b3a';
+    ctx.fillStyle = '#0e2234';
     ctx.beginPath();
-    ctx.roundRect(hw * 0.34, -hh * 0.74, hw * 0.38, v.h * 0.74, 2);
+    ctx.roundRect(Math.round(hw * 0.34), Math.round(-hh * 0.76), Math.round(hw * 0.40), Math.round(h * 0.76), 2);
     ctx.fill();
-    ctx.fillStyle = 'rgba(175, 224, 245, 0.34)';
-    ctx.fillRect(hw * 0.58, -hh * 0.66, 2.2, v.h * 0.66);
+    ctx.strokeStyle = '#060a10';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(205, 240, 255, 0.74)';
+    ctx.fillRect(Math.round(hw * 0.56), Math.round(-hh * 0.66), 2.4, Math.round(h * 0.66));
   } else {
-    // Sedan / Sports / SUV / Taxi / Police greenhouse & rolling roof cap
-    const cabinX = v.type === 'sports' ? -hw * 0.34 : -hw * 0.38;
-    const cabinW = v.type === 'suv' ? v.w * 0.56 : v.w * 0.46;
-    ctx.fillStyle = '#132331';
-    ctx.beginPath();
-    ctx.roundRect(cabinX, -hh * 0.74, cabinW, v.h * 0.74, 3);
-    ctx.fill();
+    // Sedan / Sports / SUV / Taxi / Police greenhouse & crisp roof highlight
+    const cabinX = Math.round(v.type === 'sports' ? -hw * 0.36 : -hw * 0.40);
+    const cabinW = Math.round(v.type === 'suv' ? w * 0.58 : w * 0.48);
+    const cabinH = Math.round(h * 0.78);
+    const cabinY = -cabinH * 0.5;
 
-    // Windshield sky specular glint
-    ctx.fillStyle = 'rgba(175, 224, 245, 0.38)';
+    // Dark glass greenhouse with crisp frame
+    ctx.fillStyle = '#0e2234';
     ctx.beginPath();
-    ctx.moveTo(cabinX + cabinW - 5, -hh * 0.66);
-    ctx.lineTo(cabinX + cabinW - 1, -hh * 0.66);
-    ctx.lineTo(cabinX + cabinW - 3.5, hh * 0.66);
-    ctx.lineTo(cabinX + cabinW - 7.5, hh * 0.66);
+    ctx.roundRect(cabinX, cabinY, cabinW, cabinH, 2.5);
+    ctx.fill();
+    ctx.strokeStyle = '#060a10';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Clear front windshield sky specular reflection (primary + subtle gleam)
+    ctx.fillStyle = 'rgba(205, 240, 255, 0.78)';
+    ctx.beginPath();
+    ctx.moveTo(cabinX + cabinW - 5.2, cabinY + 1);
+    ctx.lineTo(cabinX + cabinW - 1.2, cabinY + 1);
+    ctx.lineTo(cabinX + cabinW - 3.6, cabinY + cabinH - 1);
+    ctx.lineTo(cabinX + cabinW - 7.6, cabinY + cabinH - 1);
     ctx.closePath();
     ctx.fill();
 
-    // Roof panel with subtle cornering lean
+    // Subtle rear-window specular glint
+    ctx.fillStyle = 'rgba(175, 222, 246, 0.40)';
+    ctx.fillRect(cabinX + 1.2, cabinY + 1.5, 2.0, cabinH - 3);
+
+    // Roof panel with bright top-lit gradient, highlight strip & thin dark outline
     ctx.save();
     ctx.translate(0, rollRoofY * 0.5);
     const roofX = cabinX + (v.type === 'suv' ? 4 : 5);
     const roofW = cabinW - (v.type === 'suv' ? 10 : 12);
-    ctx.fillStyle = v.type === 'police' ? '#f2f4f8' : shade(baseColor, 1.15);
+    const roofH = Math.round(h * 0.62);
+    const roofY = -roofH * 0.5;
+    const roofBase = v.type === 'police' ? '#f4f7fb' : shade(baseColor, 1.22);
+    const roofGrad = ctx.createLinearGradient(0, roofY, 0, roofY + roofH);
+    roofGrad.addColorStop(0, v.type === 'police' ? '#ffffff' : shade(baseColor, 1.38));
+    roofGrad.addColorStop(1, roofBase);
+    ctx.fillStyle = roofGrad;
     ctx.beginPath();
-    ctx.roundRect(roofX, -hh * 0.6, roofW, v.h * 0.6, 2);
+    ctx.roundRect(roofX, roofY, roofW, roofH, 2);
     ctx.fill();
 
+    // Crisp leading/top roof specular highlight
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.46)';
+    ctx.fillRect(roofX + 1.2, roofY + 0.8, roofW - 2.4, 1.6);
+
+    // Thin dark roof seam outline
+    ctx.strokeStyle = 'rgba(8, 12, 20, 0.76)';
+    ctx.lineWidth = 0.95;
+    ctx.beginPath();
+    ctx.roundRect(roofX, roofY, roofW, roofH, 2);
+    ctx.stroke();
+
     if (v.type === 'taxi') {
-      ctx.fillStyle = '#1c1e22';
-      ctx.fillRect(-3.2, -4.2, 6.4, 8.4);
-      ctx.fillStyle = '#ffe278';
-      ctx.fillRect(-2.2, -3.2, 4.4, 6.4);
+      ctx.fillStyle = '#14171c';
+      ctx.fillRect(-3.5, -4.5, 7, 9);
+      ctx.fillStyle = '#ffe57a';
+      ctx.fillRect(-2.3, -3.3, 4.6, 6.6);
     }
 
     if (v.type === 'police') {
-      ctx.fillStyle = '#202630';
-      ctx.fillRect(-3.5, -hh * 0.52, 4.5, v.h * 0.52);
-      ctx.fillStyle = '#2d70ff';
-      ctx.fillRect(-3, -hh * 0.48, 3.5, v.h * 0.22);
-      ctx.fillStyle = '#ff3232';
-      ctx.fillRect(-3, 0.4, 3.5, v.h * 0.22);
+      ctx.fillStyle = '#181e28';
+      ctx.fillRect(-3.6, -hh * 0.54, 4.8, h * 0.54);
+      ctx.fillStyle = '#3680ff';
+      ctx.fillRect(-3.0, -hh * 0.48, 3.6, h * 0.22);
+      ctx.fillStyle = '#ff3838';
+      ctx.fillRect(-3.0, 0.4, 3.6, h * 0.22);
     }
     ctx.restore();
 
     if (v.type === 'sports') {
-      ctx.fillStyle = 'rgba(255, 246, 230, 0.72)';
-      ctx.fillRect(cabinX + cabinW + 1, -1.8, hw - (cabinX + cabinW) - 3, 1.3);
-      ctx.fillRect(cabinX + cabinW + 1, 0.6, hw - (cabinX + cabinW) - 3, 1.3);
-      ctx.fillStyle = shade(baseColor, 0.55);
-      ctx.fillRect(-hw + 1, -hh + 1.5, 3, v.h - 3);
+      ctx.fillStyle = 'rgba(255, 248, 232, 0.82)';
+      ctx.fillRect(cabinX + cabinW + 1, -2.0, hw - (cabinX + cabinW) - 3, 1.4);
+      ctx.fillRect(cabinX + cabinW + 1, 0.6, hw - (cabinX + cabinW) - 3, 1.4);
+      // Crisp rear spoiler wing
+      ctx.fillStyle = '#141820';
+      ctx.fillRect(-hw + 1, -hh + 1, 3.2, h - 2);
     }
 
     if (v.type === 'taxi') {
       // Iconic black-and-white checker dashes along flanks
       for (let cx = -hw + 5; cx < hw - 6; cx += 4) {
-        ctx.fillStyle = (Math.floor(cx / 4) % 2 === 0) ? '#1a1c20' : '#f4f0e4';
-        ctx.fillRect(cx, -hh + 0.6, 2.2, 1.3);
-        ctx.fillRect(cx, hh - 1.9, 2.2, 1.3);
+        ctx.fillStyle = (Math.floor(cx / 4) % 2 === 0) ? '#14171c' : '#f7f3e8';
+        ctx.fillRect(cx, -hh + 0.8, 2.2, 1.4);
+        ctx.fillRect(cx, hh - 2.2, 2.2, 1.4);
       }
     }
 
     if (v.type === 'police') {
-      ctx.fillStyle = '#f2f4f8';
-      ctx.fillRect(-hw * 0.25, -hh + 0.5, v.w * 0.28, 1.6);
-      ctx.fillRect(-hw * 0.25, hh - 2.1, v.w * 0.28, 1.6);
-      ctx.fillStyle = '#181c22';
-      ctx.fillRect(hw, -hh * 0.45, 2.2, v.h * 0.45);
+      ctx.fillStyle = '#f4f7fb';
+      ctx.fillRect(-hw * 0.26, -hh + 0.8, w * 0.30, 1.8);
+      ctx.fillRect(-hw * 0.26, hh - 2.6, w * 0.30, 1.8);
+      // Push bumper bar
+      ctx.fillStyle = '#12161e';
+      ctx.fillRect(hw, -hh * 0.48, 2.4, h * 0.48);
     }
 
-    // Side mirrors
-    ctx.fillStyle = shade(baseColor, 0.9);
-    ctx.fillRect(cabinX + cabinW - 4, -hh - 1.4, 2.5, 1.8);
-    ctx.fillRect(cabinX + cabinW - 4, hh - 0.4, 2.5, 1.8);
+    // Crisp side mirrors with dark outline
+    ctx.fillStyle = shade(baseColor, 0.96);
+    ctx.strokeStyle = '#080b10';
+    ctx.lineWidth = 0.8;
+    ctx.fillRect(cabinX + cabinW - 4, -hh - 1.5, 2.6, 1.8);
+    ctx.strokeRect(cabinX + cabinW - 4, -hh - 1.5, 2.6, 1.8);
+    ctx.fillRect(cabinX + cabinW - 4, hh - 0.3, 2.6, 1.8);
+    ctx.strokeRect(cabinX + cabinW - 4, hh - 0.3, 2.6, 1.8);
   }
 
   // 6. Brake lights & tail lights (bright red when braking/queuing, mild bloom at night)
   const braking = v.brake > 0.05 || v.handbrake || v.speed < -5;
-  ctx.fillStyle = braking ? '#ff2a2a' : '#8a1c1c';
-  ctx.fillRect(-hw, -hh * 0.74, 3.0, 3.8);
-  ctx.fillRect(-hw, hh * 0.74 - 3.8, 3.0, 3.8);
+  ctx.fillStyle = braking ? '#ff2a2a' : '#9c2020';
+  ctx.fillRect(-hw + 0.6, -hh * 0.74, 2.8, 3.8);
+  ctx.fillRect(-hw + 0.6, hh * 0.74 - 3.8, 2.8, 3.8);
   if (braking) {
     // Crisp brake lamp flare readable even in daylight
-    ctx.fillStyle = 'rgba(255, 110, 96, 0.75)';
-    ctx.fillRect(-hw - 0.6, -hh * 0.68, 2.0, 2.6);
-    ctx.fillRect(-hw - 0.6, hh * 0.68 - 2.6, 2.0, 2.6);
+    ctx.fillStyle = 'rgba(255, 130, 112, 0.85)';
+    ctx.fillRect(-hw, -hh * 0.68, 2.0, 2.6);
+    ctx.fillRect(-hw, hh * 0.68 - 2.6, 2.0, 2.6);
   }
   if (braking || night > 0.25) {
     ctx.save();
@@ -571,8 +676,8 @@ export function drawVehicle(ctx, v, night, sun, dusk = 0, t = 0) {
   if (v.blinker && Math.sin(t * 9.5 + v.id) > -0.15) {
     const sy = v.blinker < 0 ? -hh * 0.78 : hh * 0.78 - 2.4;
     ctx.fillStyle = '#ffae24';
-    ctx.fillRect(hw - 2.6, sy, 2.8, 2.6);
-    ctx.fillRect(-hw, sy, 2.8, 2.6);
+    ctx.fillRect(hw - 2.8, sy, 2.6, 2.6);
+    ctx.fillRect(-hw + 0.4, sy, 2.6, 2.6);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     for (const bx of [hw - 1, -hw + 1]) {
@@ -588,13 +693,20 @@ export function drawVehicle(ctx, v, night, sun, dusk = 0, t = 0) {
   }
 
   // 8. Crisp headlight lenses
-  ctx.fillStyle = (v.headlights && lightPower > 0.16 && (v.driver || v._headlightsOn)) ? '#fff6d6' : '#ebe4c8';
-  ctx.fillRect(hw - 2.6, -hh * 0.74, 2.6, 3.8);
-  ctx.fillRect(hw - 2.6, hh * 0.74 - 3.8, 2.6, 3.8);
+  ctx.fillStyle = (v.headlights && lightPower > 0.16 && (v.driver || v._headlightsOn)) ? '#fff8de' : '#f2ebd0';
+  ctx.fillRect(hw - 3.0, -hh * 0.74, 2.6, 3.8);
+  ctx.fillRect(hw - 3.0, hh * 0.74 - 3.8, 2.6, 3.8);
+
+  // 9. Thin crisp dark outer silhouette stroke around the pixel-snapped rounded body
+  ctx.strokeStyle = '#070a10';
+  ctx.lineWidth = 1.45;
+  ctx.beginPath();
+  ctx.roundRect(-hw, -hh, w, h, bodyR);
+  ctx.stroke();
 
   // Body scratches if damaged
   if (v.hp < v.maxHp * 0.6) {
-    ctx.strokeStyle = 'rgba(28, 30, 36, 0.58)';
+    ctx.strokeStyle = 'rgba(20, 22, 28, 0.68)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(-hw * 0.55, -hh * 0.35);

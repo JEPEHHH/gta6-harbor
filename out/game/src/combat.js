@@ -188,19 +188,31 @@ export function respawnPlayer(player, world, camera) {
   camera.snap(player.x, player.y);
 }
 
-/** Draw the weapon indicator and ammo count. */
+/** Draw the weapon indicator and ammo count with crisp dark text outline. */
 export function drawWeaponHUD(ctx, cs, x, y, font) {
   const w = WEAPONS[cs.weapon];
+  ctx.save();
   ctx.textAlign = 'right';
-  ctx.fillStyle = '#f2f5f7';
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+
+  // Weapon name (near-white label)
   ctx.font = `700 16px ${font}`;
-  ctx.fillText(w.name, x, y);
+  ctx.strokeStyle = 'rgba(3, 6, 12, 0.95)';
+  ctx.lineWidth = 2.2;
+  ctx.strokeText(w.name.toUpperCase(), x, y);
+  ctx.fillStyle = '#f6f9fc';
+  ctx.fillText(w.name.toUpperCase(), x, y);
 
   if (cs.weapon !== 'fist') {
-    ctx.fillStyle = '#9fb0ba';
-    ctx.font = `600 13px ${font}`;
+    // Ammo count (accent value)
+    ctx.font = `800 15px ${font}`;
     const ammoText = cs.ammo[cs.weapon] !== undefined ? String(cs.ammo[cs.weapon]) : '∞';
-    ctx.fillText(ammoText, x, y + 18);
+    ctx.strokeStyle = 'rgba(3, 6, 12, 0.95)';
+    ctx.lineWidth = 2.2;
+    ctx.strokeText(ammoText, x, y + 20);
+    ctx.fillStyle = '#ffc464';
+    ctx.fillText(ammoText, x, y + 20);
   }
 
   // Muzzle flash indicator
@@ -210,6 +222,7 @@ export function drawWeaponHUD(ctx, cs, x, y, font) {
     ctx.arc(x - 70, y - 5, 8, 0, TAU);
     ctx.fill();
   }
+  ctx.restore();
 }
 
 /** Draw crosshair. */
