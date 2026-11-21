@@ -29,20 +29,35 @@ export function updateBullets(bullets, dt) {
   }
 }
 
-/** Spawn a small ring of particles at an impact point. */
+/** Spawn a small ring of particles (dust/sparks/blood) at an impact point. */
 export function impactBurst(particles, x, y, color = '220,180,120') {
-  for (let k = 0; k < 6; k += 1) {
-    const a = (k / 6) * TAU + Math.random() * 0.4;
-    const sp = 40 + Math.random() * 60;
+  const isSpark = color === '220,180,120';
+  for (let k = 0; k < 7; k += 1) {
+    const a = (k / 7) * TAU + Math.random() * 0.4;
+    const sp = (isSpark ? 75 : 42) + Math.random() * (isSpark ? 90 : 55);
     particles.push({
+      kind: isSpark ? 'spark' : 'dust',
       x,
       y,
       vx: Math.cos(a) * sp,
       vy: Math.sin(a) * sp,
       age: 0,
-      life: 0.35 + Math.random() * 0.2,
-      size: 1.8 + Math.random() * 1.5,
+      life: (isSpark ? 0.25 : 0.36) + Math.random() * 0.18,
+      size: 1.9 + Math.random() * 1.5,
       color,
+    });
+  }
+  if (isSpark) {
+    particles.push({
+      kind: 'flash',
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      age: 0,
+      life: 0.12,
+      size: 6,
+      color: '255,220,130',
     });
   }
 }

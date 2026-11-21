@@ -123,29 +123,39 @@ export function laneOffset(dx, dy, lane = 1) {
   return { ox: nx * CITY.roadHalf * 0.5 * lane, oy: ny * CITY.roadHalf * 0.5 * lane };
 }
 
-/** Draw traffic light indicators at intersections. */
-export function drawLights(ctx, graph, view) {
+/** Draw overhead traffic signal housings with glowing red/amber/green lenses. */
+export function drawLights(ctx, graph, view, night = 0) {
   for (const l of graph.lights) {
     if (l.x < view.x - 40 || l.x > view.x + view.w + 40 ||
         l.y < view.y - 40 || l.y > view.y + view.h + 40) continue;
-    const r = CITY.roadHalf + 4;
-    // North-south indicator
-    const nsColor = l.phase === 0 ? '#3ad05a' : l.phase === 1 ? '#e8d040' : '#d04040';
-    ctx.fillStyle = nsColor;
-    ctx.beginPath();
-    ctx.arc(l.x + r, l.y - r, 3.5, 0, TAU);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(l.x - r, l.y + r, 3.5, 0, TAU);
-    ctx.fill();
-    // East-west indicator
-    const ewColor = l.phase === 2 ? '#3ad05a' : l.phase === 3 ? '#e8d040' : '#d04040';
-    ctx.fillStyle = ewColor;
-    ctx.beginPath();
-    ctx.arc(l.x + r, l.y + r, 3.5, 0, TAU);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(l.x - r, l.y - r, 3.5, 0, TAU);
-    ctx.fill();
+    const r = CITY.roadHalf + 5;
+    const nsColor = l.phase === 0 ? '#3ee06a' : l.phase === 1 ? '#f2cf44' : '#eb3f3f';
+    const ewColor = l.phase === 2 ? '#3ee06a' : l.phase === 3 ? '#f2cf44' : '#eb3f3f';
+    const pts = [
+      [l.x + r, l.y - r, nsColor],
+      [l.x - r, l.y + r, nsColor],
+      [l.x + r, l.y + r, ewColor],
+      [l.x - r, l.y - r, ewColor],
+    ];
+    for (const [px, py, col] of pts) {
+      ctx.fillStyle = '#20242c';
+      ctx.beginPath();
+      ctx.arc(px, py, 5.2, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(px, py, 3.2, 0, TAU);
+      ctx.fill();
+      if (night > 0.15) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = col;
+        ctx.globalAlpha = 0.25 * night;
+        ctx.beginPath();
+        ctx.arc(px, py, 10, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
   }
 }

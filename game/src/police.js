@@ -147,37 +147,54 @@ export function resetPolice(ps) {
   ps.respawnTimer = 2;
 }
 
-/** Draw police siren lights on cars and ground glow. */
+/** Draw police siren lights on cars and vibrant dual-side ground strobe pools. */
 export function drawPoliceLights(ctx, ps, t) {
   for (const u of ps.units) {
     if (!u.sirenOn) continue;
     const car = u.car;
-    const flash = Math.sin(t * 12) > 0;
+    const flash = Math.sin(t * 14 + car.id) > 0;
+    const perpX = -Math.sin(car.angle);
+    const perpY = Math.cos(car.angle);
 
-    // Flashing ground strobe pool around the cruiser
+    // Dual-side flashing ground light pools (red on one side, blue on the other)
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const strobeColor = flash ? 'rgba(230,40,40,0.22)' : 'rgba(40,100,240,0.22)';
-    const grad = ctx.createRadialGradient(car.x, car.y, 10, car.x, car.y, 90);
-    grad.addColorStop(0, strobeColor);
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(car.x, car.y, 90, 0, TAU);
-    ctx.fill();
-    ctx.restore();
+    const sides = [
+      { ox: perpX * 16, oy: perpY * 16, col: flash ? '255,40,48' : '44,124,255', a: flash ? 0.48 : 0.36 },
+      { ox: -perpX * 16, oy: -perpY * 16, col: flash ? '44,124,255' : '255,40,48', a: flash ? 0.36 : 0.48 },
+    ];
+    for (const s of sides) {
+      const gx = car.x + s.ox;
+      const gy = car.y + s.oy;
+      const grad = ctx.createRadialGradient(gx, gy, 3, gx, gy, 88);
+      grad.addColorStop(0, `rgba(${s.col},${s.a})`);
+      grad.addColorStop(0.45, `rgba(${s.col},${(s.a * 0.42).toFixed(3)})`);
+      grad.addColorStop(1, `rgba(${s.col},0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(gx, gy, 88, 0, TAU);
+      ctx.fill();
+    }
 
-    // Red/blue lights on the roof
-    ctx.save();
+    // Crisp blooming roof lightbar flares
     ctx.translate(car.x, car.y);
     ctx.rotate(car.angle);
-    ctx.fillStyle = flash ? '#ff2020' : '#2040ff';
+    ctx.fillStyle = flash ? '#ff3636' : '#3884ff';
     ctx.beginPath();
-    ctx.arc(-2, -car.h * 0.15, 3.5, 0, TAU);
+    ctx.arc(-1.5, -car.h * 0.22, 4.2, 0, TAU);
     ctx.fill();
-    ctx.fillStyle = flash ? '#2040ff' : '#ff2020';
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(-2, car.h * 0.15, 3.5, 0, TAU);
+    ctx.arc(-1.5, -car.h * 0.22, 1.8, 0, TAU);
+    ctx.fill();
+
+    ctx.fillStyle = flash ? '#3884ff' : '#ff3636';
+    ctx.beginPath();
+    ctx.arc(-1.5, car.h * 0.22, 4.2, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(-1.5, car.h * 0.22, 1.8, 0, TAU);
     ctx.fill();
     ctx.restore();
   }

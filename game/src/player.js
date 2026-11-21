@@ -3,9 +3,10 @@
 // beyond the pose.
 
 import { PALETTE, PLAYER, CAMERA } from './config.js';
-import { TAU, angleLerp, clamp, damp, dist } from './util.js';
+import { TAU, angleLerp, clamp, damp, dist, shade } from './util.js';
 import { canEnter, updateVehicle } from './vehicles.js';
 import { reportCrime } from './wanted.js';
+import { drawSoftDropShadow } from './lighting.js';
 
 export function createPlayer(world) {
   return {
@@ -144,43 +145,75 @@ function updateDriving(p, dt, input, world, particles, vehicles, camera, skidmar
   p.vy = car.vy;
 }
 
-export function drawPlayer(ctx, p) {
+export function drawPlayer(ctx, p, sun, weapon = 'fist') {
   if (p.inCar) return;   // drawn as the vehicle instead
 
-  ctx.fillStyle = 'rgba(20,24,32,0.28)';
-  ctx.beginPath();
-  ctx.ellipse(p.x + 3, p.y + 4, 10, 5, 0, 0, TAU);
-  ctx.fill();
+  const swing = p.moving ? Math.sin(p.walkPhase) * 4.2 : 0;
+  const bob = p.moving ? Math.abs(Math.cos(p.walkPhase)) * 0.9 : 0;
+
+  if (sun) {
+    drawSoftDropShadow(ctx, p.x, p.y + 2, 10, 5.5, sun, 11);
+  } else {
+    ctx.fillStyle = 'rgba(16, 20, 28, 0.30)';
+    ctx.beginPath();
+    ctx.ellipse(p.x + 3, p.y + 4, 10, 5, 0, 0, TAU);
+    ctx.fill();
+  }
 
   ctx.save();
-  ctx.translate(p.x, p.y);
+  ctx.translate(p.x, p.y - bob);
   ctx.rotate(p.angle + Math.PI / 2);
-  const swing = p.moving ? Math.sin(p.walkPhase) * 4 : 0;
 
-  ctx.fillStyle = '#2e3a46';
-  ctx.fillRect(-5, 1 + swing * 0.5, 4, 7);
-  ctx.fillRect(1, 1 - swing * 0.5, 4, 7);
-
-  ctx.fillStyle = '#c98d5f';
+  // Legs / trousers
+  ctx.fillStyle = '#242e3b';
   ctx.beginPath();
-  ctx.arc(-7, -swing * 0.6, 2.6, 0, TAU);
-  ctx.arc(7, swing * 0.6, 2.6, 0, TAU);
+  ctx.roundRect(-5.2, 1 + swing * 0.5, 4.2, 7.2, 1.5);
+  ctx.roundRect(1.0, 1 - swing * 0.5, 4.2, 7.2, 1.5);
   ctx.fill();
 
-  ctx.fillStyle = '#37a7ad';
+  // Arms
+  ctx.fillStyle = '#cc9162';
   ctx.beginPath();
-  ctx.roundRect(-6, -7, 12, 12, 4);
+  ctx.arc(-7.4, -0.8 - swing * 0.55, 2.7, 0, TAU);
+  ctx.arc(7.4, weapon !== 'fist' ? -6.5 : -0.8 + swing * 0.55, 2.7, 0, TAU);
   ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.22)';
-  ctx.fillRect(-6, -7, 12, 3);
 
-  ctx.fillStyle = '#c98d5f';
+  // Held weapon (pistol or SMG)
+  if (weapon === 'pistol' || weapon === 'smg') {
+    ctx.fillStyle = '#1e242c';
+    const gunLen = weapon === 'smg' ? 10 : 7;
+    ctx.fillRect(6.2, -7 - gunLen, 2.6, gunLen);
+    ctx.fillStyle = '#6c7682';
+    ctx.fillRect(6.5, -7 - gunLen, 1.2, gunLen * 0.6);
+  }
+
+  // Shaded teal harbor jacket
+  const jGrad = ctx.createLinearGradient(-6, -7, 6, 5);
+  jGrad.addColorStop(0, shade('#2fb4bc', 1.22));
+  jGrad.addColorStop(0.55, '#2b9ea6');
+  jGrad.addColorStop(1, shade('#2b9ea6', 0.72));
+  ctx.fillStyle = jGrad;
   ctx.beginPath();
-  ctx.arc(0, -6, 5, 0, TAU);
+  ctx.roundRect(-6.5, -7.2, 13, 12.2, 4.2);
   ctx.fill();
-  ctx.fillStyle = '#2e3a46';
+  ctx.fillStyle = 'rgba(255, 252, 240, 0.25)';
+  ctx.fillRect(-5.5, -7, 11, 2.6);
+  ctx.strokeStyle = 'rgba(12, 18, 26, 0.42)';
+  ctx.lineWidth = 0.9;
+  ctx.stroke();
+
+  // Head & styled dark hair with rim highlight
+  ctx.fillStyle = '#cc9162';
   ctx.beginPath();
-  ctx.arc(0, -7.4, 4.6, Math.PI, TAU);
+  ctx.arc(0, -6.2, 5.2, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = '#1f2833';
+  ctx.beginPath();
+  ctx.arc(0, -7.5, 4.9, Math.PI * 0.92, TAU + 0.25);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+  ctx.beginPath();
+  ctx.arc(-1.5, -8.8, 1.5, 0, TAU);
   ctx.fill();
   ctx.restore();
 }

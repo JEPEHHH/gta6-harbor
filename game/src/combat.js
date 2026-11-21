@@ -4,6 +4,7 @@
 import { WEAPONS, PLAYER } from './config.js';
 import { TAU, clamp, dist } from './util.js';
 import { createBullet, impactBurst } from './shots.js';
+import { spawnExplosion } from './effects.js';
 
 /** Create the player combat state. */
 export function createCombatState() {
@@ -77,14 +78,24 @@ export function updateCombat(cs, dt, player, input, camera, world, bullets, part
       // Screen shake
       camera.shake(2.5, 0.1);
 
-      // Muzzle flash particle
+      // Muzzle flash light burst + gunsmoke puff
       particles.push({
-        x: player.x + Math.cos(player.angle) * 12,
-        y: player.y + Math.sin(player.angle) * 12,
-        vx: Math.cos(player.angle) * 30,
-        vy: Math.sin(player.angle) * 30,
-        age: 0, life: 0.1, size: 4,
-        color: '255,230,120',
+        kind: 'flash',
+        x: player.x + Math.cos(player.angle) * 14,
+        y: player.y + Math.sin(player.angle) * 14,
+        vx: Math.cos(player.angle) * 35,
+        vy: Math.sin(player.angle) * 35,
+        age: 0, life: 0.11, size: 7,
+        color: '255,235,140',
+      });
+      particles.push({
+        kind: 'smoke',
+        x: player.x + Math.cos(player.angle) * 16,
+        y: player.y + Math.sin(player.angle) * 16,
+        vx: Math.cos(player.angle) * 28 + (Math.random() - 0.5) * 14,
+        vy: Math.sin(player.angle) * 28 + (Math.random() - 0.5) * 14,
+        age: 0, life: 0.42, size: 3.2,
+        color: '215,212,206',
       });
 
       reportCrimeFn('shoot');
@@ -119,9 +130,14 @@ export function resolveBulletHits(bullets, peds, policeUnits, player, world, par
     if (!b.hit) {
       for (const u of policeUnits) {
         if (dist(b.x, b.y, u.car.x, u.car.y) < 20) {
+          const prevHp = u.car.hp;
           u.car.hp -= 15;
           b.hit = true;
           impactBurst(particles, b.x, b.y, '220,180,120');
+          if (prevHp > 0 && u.car.hp <= 0) {
+            spawnExplosion(particles, u.car.x, u.car.y, 1.15);
+            camera.shake(7, 0.35);
+          }
           reportCrimeFn('shoot');
           break;
         }

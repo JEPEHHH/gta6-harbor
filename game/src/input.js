@@ -14,6 +14,7 @@ export const KEYMAP = {
   horn: ['KeyH'],
   melee: ['KeyV'],
   radio: ['KeyR'],
+  rain: ['KeyN'],
 };
 
 const HANDLED = new Set(Object.values(KEYMAP).flat());

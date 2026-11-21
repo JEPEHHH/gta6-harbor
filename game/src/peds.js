@@ -1,11 +1,13 @@
 // Pedestrian AI: civilians walking on sidewalks, fleeing from gunfire and vehicles
-// on the pavement. One job: be a pedestrian.
+// on the pavement. Rendered as shaded figures with walking animation & contact shadows.
 
 import { CITY, PALETTE } from './config.js';
-import { TAU, clamp, dist } from './util.js';
+import { TAU, clamp, dist, shade } from './util.js';
+import { drawSoftDropShadow } from './lighting.js';
 
-const SHIRT_COLORS = ['#37a7ad', '#ad6837', '#5a37ad', '#37ad5a', '#ad3737', '#c0a040', '#6080c0', '#c06080'];
-const HAIR_COLORS = ['#2e3a46', '#5a3a1a', '#8a6a4a', '#1a1a1a', '#a08060'];
+const SHIRT_COLORS = ['#2ca8ad', '#c76d3b', '#6d44b8', '#3da65d', '#c43e47', '#d4aa3d', '#4f7ec9', '#cc568b'];
+const HAIR_COLORS = ['#26303b', '#5a3a1a', '#8c6b47', '#18181c', '#b39066', '#40261b'];
+const SKIN_TONES = ['#d69c72', '#c38458', '#e6b892', '#8f5a3c', '#b2764f'];
 
 let pedId = 1;
 
@@ -26,6 +28,7 @@ export function createPed(x, y, rng) {
     alive: true,
     shirt: SHIRT_COLORS[Math.floor(rng() * SHIRT_COLORS.length)],
     hair: HAIR_COLORS[Math.floor(rng() * HAIR_COLORS.length)],
+    skin: SKIN_TONES[Math.floor(rng() * SKIN_TONES.length)],
     fleeTimer: 0,
   };
 }
@@ -36,7 +39,6 @@ export function spawnPeds(world, player, rng, existing, target = 20) {
   if (existing.length >= target) return peds;
   const needed = target - existing.length;
   for (let n = 0; n < needed; n += 1) {
-    // Pick a spot on a sidewalk near a road, offset from player
     const roadIdx = Math.floor(rng() * world.roadsV.length);
     const roadJdx = Math.floor(rng() * world.roadsH.length);
     const useV = rng() < 0.5;
@@ -61,12 +63,10 @@ export function updatePeds(peds, dt, world, player, vehicles, particles, rng) {
   for (const ped of peds) {
     if (!ped.alive) continue;
 
-    // Check for threats: gunfire, speeding vehicles near them on the sidewalk
     let threatX = 0;
     let threatY = 0;
     let threatened = false;
 
-    // Vehicles close and fast — flee
     for (const v of vehicles) {
       if (!v.driver) continue;
       const d = dist(ped.x, ped.y, v.x, v.y);
@@ -78,7 +78,6 @@ export function updatePeds(peds, dt, world, player, vehicles, particles, rng) {
       }
     }
 
-    // Player shooting nearby — flee
     if (player.shooting && dist(ped.x, ped.y, player.x, player.y) < 300) {
       threatened = true;
       threatX = player.x;
@@ -94,7 +93,6 @@ export function updatePeds(peds, dt, world, player, vehicles, particles, rng) {
 
     if (ped.state === 'flee') {
       ped.fleeTimer -= dt;
-      // Run away from the threat
       const fleeAngle = Math.atan2(ped.y - threatY, ped.x - threatX);
       ped.vx = Math.cos(fleeAngle) * ped.speed * 2;
       ped.vy = Math.sin(fleeAngle) * ped.speed * 2;
@@ -104,12 +102,10 @@ export function updatePeds(peds, dt, world, player, vehicles, particles, rng) {
         ped.stateTimer = 3 + rng() * 5;
       }
     } else if (ped.state === 'walk') {
-      // Walk toward target
       const toX = ped.targetX - ped.x;
       const toY = ped.targetY - ped.y;
       const toD = Math.hypot(toX, toY);
       if (toD < 10 || ped.stateTimer <= 0) {
-        // Pick a new target on a sidewalk nearby
         if (rng() < 0.3) {
           ped.state = 'idle';
           ped.stateTimer = 2 + rng() * 4;
@@ -128,7 +124,6 @@ export function updatePeds(peds, dt, world, player, vehicles, particles, rng) {
         ped.angle = Math.atan2(ped.vy, ped.vx);
       }
     } else {
-      // Idle
       ped.vx = 0;
       ped.vy = 0;
       if (ped.stateTimer <= 0) {
@@ -141,7 +136,6 @@ export function updatePeds(peds, dt, world, player, vehicles, particles, rng) {
       }
     }
 
-    // Move with collision
     const nx = ped.x + ped.vx * dt;
     const ny = ped.y + ped.vy * dt;
     if (!world.isWater(nx, ny) && nx > 20 && nx < world.w - 20 && ny > 20 && ny < world.h - 20) {
@@ -154,7 +148,6 @@ export function updatePeds(peds, dt, world, player, vehicles, particles, rng) {
 
     ped.walkPhase += Math.hypot(ped.vx, ped.vy) * dt * 0.09;
 
-    // Vehicle hit detection
     for (const v of vehicles) {
       if (!v.driver) continue;
       const sp = Math.hypot(v.vx, v.vy);
@@ -163,7 +156,6 @@ export function updatePeds(peds, dt, world, player, vehicles, particles, rng) {
         ped.health -= sp * 0.3;
         ped.vx = v.vx * 0.3;
         ped.vy = v.vy * 0.3;
-        // Blood particles
         for (let k = 0; k < 4; k += 1) {
           particles.push({
             x: ped.x, y: ped.y,
@@ -189,44 +181,71 @@ export function cullPeds(peds, player, maxDist = 2000) {
   }
 }
 
-/** Draw a single pedestrian. */
-export function drawPed(ctx, ped) {
+/** Draw a shaded pedestrian figure with walking swing and soft contact shadow. */
+export function drawPed(ctx, ped, sun) {
   if (!ped.alive) return;
 
+  const sp = Math.hypot(ped.vx, ped.vy);
+  const moving = sp > 8;
+  const stride = moving ? Math.sin(ped.walkPhase) * 3.8 : 0;
+  const bob = moving ? Math.abs(Math.cos(ped.walkPhase)) * 0.8 : 0;
+  const skin = ped.skin || '#c98d5f';
+
+  // Soft contact + sun shadow on pavement
+  if (sun) {
+    drawSoftDropShadow(ctx, ped.x, ped.y + 2, 7.5, 4.5, sun, 9);
+  } else {
+    ctx.fillStyle = 'rgba(14, 18, 28, 0.26)';
+    ctx.beginPath();
+    ctx.ellipse(ped.x + 2, ped.y + 3, 7.2, 4.2, 0, 0, TAU);
+    ctx.fill();
+  }
+
   ctx.save();
-  ctx.translate(ped.x, ped.y);
+  ctx.translate(ped.x, ped.y - bob);
   ctx.rotate(ped.angle + Math.PI / 2);
 
-  const moving = Math.hypot(ped.vx, ped.vy) > 10;
-  const swing = moving ? Math.sin(ped.walkPhase) * 3.5 : 0;
-
-  // Shadow
-  ctx.fillStyle = 'rgba(20,24,32,0.2)';
+  // Walking legs / shoes
+  ctx.fillStyle = '#252a36';
   ctx.beginPath();
-  ctx.ellipse(2, 3, 7, 4, 0, 0, TAU);
+  ctx.roundRect(-4.2, 0.5 + stride * 0.55, 3.2, 6.2, 1.4);
+  ctx.roundRect(1.0, 0.5 - stride * 0.55, 3.2, 6.2, 1.4);
   ctx.fill();
 
-  // Legs
-  ctx.fillStyle = '#3a3a4a';
-  ctx.fillRect(-4, 1 + swing * 0.4, 3, 6);
-  ctx.fillRect(1, 1 - swing * 0.4, 3, 6);
-
-  // Body (shirt)
-  ctx.fillStyle = ped.shirt;
+  // Swinging arms (hands)
+  ctx.fillStyle = skin;
   ctx.beginPath();
-  ctx.roundRect(-5, -6, 10, 10, 3);
+  ctx.arc(-6.4, -1.5 - stride * 0.55, 2.2, 0, TAU);
+  ctx.arc(6.4, -1.5 + stride * 0.55, 2.2, 0, TAU);
   ctx.fill();
 
-  // Head
-  ctx.fillStyle = '#c98d5f';
+  // Shaded torso / shirt with directional shoulder highlight
+  const shirtGrad = ctx.createLinearGradient(-5, -6, 5, 4);
+  shirtGrad.addColorStop(0, shade(ped.shirt, 1.24));
+  shirtGrad.addColorStop(0.55, ped.shirt);
+  shirtGrad.addColorStop(1, shade(ped.shirt, 0.72));
+  ctx.fillStyle = shirtGrad;
   ctx.beginPath();
-  ctx.arc(0, -5, 4, 0, TAU);
+  ctx.roundRect(-5.6, -6.2, 11.2, 10.2, 3.6);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(15, 20, 28, 0.35)';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // Head with subtle face lighting
+  ctx.fillStyle = skin;
+  ctx.beginPath();
+  ctx.arc(0, -5.2, 4.3, 0, TAU);
   ctx.fill();
 
-  // Hair
+  // Hair cap + highlight sheen
   ctx.fillStyle = ped.hair;
   ctx.beginPath();
-  ctx.arc(0, -6.2, 3.8, Math.PI, TAU);
+  ctx.arc(0, -6.2, 4.1, Math.PI * 0.92, TAU + 0.25);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+  ctx.beginPath();
+  ctx.arc(-1.2, -7.2, 1.4, 0, TAU);
   ctx.fill();
 
   ctx.restore();

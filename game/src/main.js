@@ -84,6 +84,7 @@ const game = {
   dialogue: null,
   dialogueTimer: 0,
   skidmarks: [],
+  rain: false,
 };
 
 // Audio state tracking
@@ -238,6 +239,10 @@ function handleInput() {
     // Weapon cycling with scroll or number keys (handled via radio key for simplicity)
     if (input.pressed('radio')) {
       cycleWeapon(combat);
+    }
+    if (input.pressed('rain')) {
+      game.rain = !game.rain;
+      notify(game.rain ? 'Harbor rain: ON' : 'Harbor rain: OFF', 2);
     }
     // Start next mission with C key when between missions
     if (input.pressed('continue') && !missionState.active && !missionState.epilogueDone && missionState.missionJustCompleted) {
@@ -511,6 +516,8 @@ window.__harbor = {
       return true;
     }
     if (game.screen !== 'play') newGame();
+    game.deathScreen = null;
+    policeState.bustedTimer = 0;
     if (name === 'pause') {
       game.screen = 'pause';
       game.menuIndex = 0;
@@ -519,71 +526,131 @@ window.__harbor = {
     if (name === 'foot') {
       player.inCar = null;
       if (engineRunning) { stopEngine(); engineRunning = false; }
-      this.setTime(13.5);
+      this.setTime(15.2);
       this.setWanted(0);
-      this.teleport(1600, 1420);
+      resetPolice(policeState);
+      game.skidmarks.length = 0;
+      game.particles.length = 0;
+      game.bullets.length = 0;
+      game.notifications.length = 0;
+      game.dialogue = null;
+      game.rain = false;
+      this.teleport(1842, 1534);
+      player.angle = -Math.PI * 0.14;
+      player.moving = true;
+      player.walkPhase = 1.1;
       player.health = 100;
       player.armour = 75;
       combat.weapon = 'smg';
-      game.district = 'Downtown';
+      game.district = world.districtAt(player.x, player.y);
       game.objective = 'Explore Blackwater Harbor — find a ride';
       game.peds = spawnPeds(world, player, rng, [], 25);
-      game.peds.push({ id: 9981, x: player.x + 35, y: player.y + 20, vx: 20, vy: 0, angle: 0, speed: 45, walkPhase: 0, state: 'walk', stateTimer: 5, targetX: player.x + 100, targetY: player.y + 20, health: 40, alive: true, shirt: '#37a7ad', hair: '#1a1a1a', fleeTimer: 0 });
-      game.peds.push({ id: 9982, x: player.x - 45, y: player.y - 15, vx: -20, vy: 0, angle: Math.PI, speed: 50, walkPhase: 1, state: 'walk', stateTimer: 5, targetX: player.x - 100, targetY: player.y - 15, health: 40, alive: true, shirt: '#ad6837', hair: '#5a3a1a', fleeTimer: 0 });
-      game.traffic = spawnTraffic(world, roadGraph, rng, 12);
-      camera.snap(player.x, player.y);
+      game.peds.push({ id: 9981, x: player.x - 44, y: player.y + 4, vx: 38, vy: 0, angle: 0, speed: 45, walkPhase: 0.7, state: 'walk', stateTimer: 5, targetX: player.x + 140, targetY: player.y + 4, health: 40, alive: true, shirt: '#2ca8ad', hair: '#18181c', skin: '#d69c72', fleeTimer: 0 });
+      game.peds.push({ id: 9982, x: player.x + 62, y: player.y + 2, vx: -34, vy: 0, angle: Math.PI, speed: 50, walkPhase: 2.1, state: 'walk', stateTimer: 5, targetX: player.x - 150, targetY: player.y + 2, health: 40, alive: true, shirt: '#c76d3b', hair: '#5a3a1a', skin: '#b2764f', fleeTimer: 0 });
+      game.peds.push({ id: 9983, x: player.x - 110, y: player.y + 52, vx: 22, vy: 12, angle: 0.4, speed: 44, walkPhase: 1.5, state: 'walk', stateTimer: 5, targetX: player.x - 20, targetY: player.y + 80, health: 40, alive: true, shirt: '#cc568b', hair: '#8c6b47', skin: '#e6b892', fleeTimer: 0 });
+      game.traffic = spawnTraffic(world, roadGraph, rng, 14);
+      const streetTaxi = createVehicle(player.x + 115, 1510, 0, 'taxi');
+      streetTaxi.driver = 'traffic'; streetTaxi.vx = 85;
+      game.traffic.push(streetTaxi);
+      const streetSedan = createVehicle(player.x - 150, 1488, Math.PI, 'sedan');
+      streetSedan.driver = 'traffic'; streetSedan.vx = -80;
+      game.traffic.push(streetSedan);
+      camera.snap(player.x - 40, player.y + 20);
       return true;
     }
     if (name === 'car') {
-      this.setTime(15.5);
+      this.setTime(16.4);
       this.setWanted(0);
-      this.teleport(2000, 1500);
-      const car = createVehicle(player.x, player.y, 0, 'sports');
+      resetPolice(policeState);
+      game.notifications.length = 0;
+      game.dialogue = null;
+      game.particles.length = 0;
+      game.bullets.length = 0;
+      game.rain = false;
+      this.teleport(2040, 1500);
+      const car = createVehicle(player.x, player.y, -0.06, 'sports');
       car.driver = 'player';
-      car.speed = 240;
-      car.vx = 240;
-      car.vy = 0;
+      car.speed = 355;
+      car.vx = 352;
+      car.vy = -22;
       car.throttle = 1.0;
+      car.steer = -0.58;
       parkedCars.push(car);
       player.inCar = car;
       player.x = car.x;
       player.y = car.y;
-      player.angle = 0;
-      player.vx = 240;
-      player.vy = 0;
-      // Skid marks behind the drift
+      player.angle = car.angle;
+      player.vx = car.vx;
+      player.vy = car.vy;
+      game.district = world.districtAt(player.x, player.y);
+      // Realistic sweeping twin-tyre drift arc behind the sports car
       game.skidmarks = [];
-      for (let k = 0; k < 16; k += 1) {
-        game.skidmarks.push({ x1: car.x - 40 - k * 14, y1: car.y - 6 - k * 0.7, x2: car.x - 24 - k * 14, y2: car.y - 6 - k * 0.7, alpha: 0.7, w: 3 });
-        game.skidmarks.push({ x1: car.x - 40 - k * 14, y1: car.y + 6 + k * 0.7, x2: car.x - 24 - k * 14, y2: car.y + 6 + k * 0.7, alpha: 0.7, w: 3 });
+      for (let k = 0; k < 22; k += 1) {
+        const t0 = k / 22;
+        const t1 = (k + 1) / 22;
+        const x0 = car.x - 18 - t0 * 265;
+        const y0 = car.y + 4 + Math.sin(t0 * 2.15) * 24;
+        const x1 = car.x - 18 - t1 * 265;
+        const y1 = car.y + 4 + Math.sin(t1 * 2.15) * 24;
+        const ang = Math.atan2(y1 - y0, x1 - x0);
+        const px = -Math.sin(ang) * 5.8;
+        const py = Math.cos(ang) * 5.8;
+        const fade = (1 - t0 * 0.72) * 0.56;
+        game.skidmarks.push({ x1: x0 + px, y1: y0 + py, x2: x1 + px, y2: y1 + py, alpha: fade, w: 3.1 });
+        game.skidmarks.push({ x1: x0 - px, y1: y0 - py, x2: x1 - px, y2: y1 - py, alpha: fade, w: 3.1 });
       }
-      for (let s = 0; s < 10; s += 1) {
-        game.particles.push({ x: car.x - 25 - s * 8, y: car.y + (s % 2 === 0 ? 6 : -6), vx: -30, vy: (s % 2 === 0 ? 8 : -8), age: 0, life: 1.0, size: 4 + s * 0.8, color: '180,180,185' });
+      for (let s = 0; s < 14; s += 1) {
+        game.particles.push({ kind: 'smoke', x: car.x - 20 - s * 11, y: car.y + 4 + (s % 2 === 0 ? 6 : -6), vx: -28, vy: (s % 2 === 0 ? 9 : -9), age: s * 0.035, life: 1.35, size: 5.5 + s * 0.9, color: '216,218,224' });
       }
-      const tCar = createVehicle(car.x + 280, car.y + 24, 0, 'taxi');
+      game.traffic = spawnTraffic(world, roadGraph, rng, 12);
+      const tCar = createVehicle(car.x + 280, car.y + 15, 0, 'taxi');
       tCar.driver = 'traffic';
+      tCar.vx = 90;
       game.traffic.push(tCar);
-      const tCar2 = createVehicle(car.x + 520, car.y - 24, Math.PI, 'sedan');
+      const tCar2 = createVehicle(car.x + 440, car.y - 16, Math.PI, 'sedan');
       tCar2.driver = 'traffic';
+      tCar2.vx = -95;
       game.traffic.push(tCar2);
-      camera.snap(car.x, car.y);
+      const tCar3 = createVehicle(car.x - 120, car.y - 18, Math.PI, 'suv');
+      tCar3.driver = 'traffic';
+      tCar3.vx = -80;
+      game.traffic.push(tCar3);
+      camera.snap(car.x + 40, car.y);
       return true;
     }
     if (name === 'chase') {
       this.state('car');
-      this.setTime(18.5);
+      this.setTime(18.6);
       setWantedLevel(wantedState, 3);
       game.wanted = 3;
       forcePoliceChase(policeState, world, player, roadGraph, rng, 3);
+      // Align pursuing cruisers behind & flanking the player without instant busted collisions
+      if (policeState.units[0]) {
+        const c = policeState.units[0].car;
+        c.x = player.x - 150; c.y = player.y + 10; c.angle = -0.05; c.vx = 250; c.vy = -10;
+      }
+      if (policeState.units[1]) {
+        const c = policeState.units[1].car;
+        c.x = player.x - 255; c.y = player.y - 16; c.angle = 0.06; c.vx = 260; c.vy = 14;
+      }
+      if (policeState.units[2]) {
+        const c = policeState.units[2].car;
+        c.x = player.x + 310; c.y = player.y - 115; c.angle = Math.PI * 0.56; c.vx = -15; c.vy = 145;
+      }
       game.objective = 'Escape the police — lose the wanted level';
-      game.mission = { waypoint: { x: 1800, y: 3300 } };
-      updateMissionBlips();
+      game.mission = { waypoint: { x: 4500, y: 1180 } };
+      game.district = world.districtAt(player.x, player.y);
+      game.notifications.length = 0;
       const extraTraffic = spawnTraffic(world, roadGraph, rng, 8);
       game.traffic.push(...extraTraffic);
       const extraPeds = spawnPeds(world, player, rng, game.peds, 25);
       game.peds.push(...extraPeds);
-      game.peds.push({ id: 9991, x: player.x + 60, y: player.y - 40, vx: 50, vy: -20, angle: 0, speed: 70, walkPhase: 0, state: 'flee', stateTimer: 5, targetX: 0, targetY: 0, health: 40, alive: true, shirt: '#ad3737', hair: '#1a1a1a', fleeTimer: 5 });
-      game.peds.push({ id: 9992, x: player.x + 90, y: player.y + 40, vx: 60, vy: 20, angle: 0, speed: 75, walkPhase: 0, state: 'flee', stateTimer: 5, targetX: 0, targetY: 0, health: 40, alive: true, shirt: '#37a7ad', hair: '#5a3a1a', fleeTimer: 5 });
+      game.peds.push({ id: 9991, x: player.x + 70, y: player.y - 44, vx: 55, vy: -24, angle: -0.4, speed: 70, walkPhase: 0.4, state: 'flee', stateTimer: 5, targetX: 0, targetY: 0, health: 40, alive: true, shirt: '#c43e47', hair: '#18181c', skin: '#d69c72', fleeTimer: 5 });
+      game.peds.push({ id: 9992, x: player.x + 115, y: player.y + 44, vx: 60, vy: 22, angle: 0.35, speed: 75, walkPhase: 1.6, state: 'flee', stateTimer: 5, targetX: 0, targetY: 0, health: 40, alive: true, shirt: '#2ca8ad', hair: '#5a3a1a', skin: '#c38458', fleeTimer: 5 });
+      game.bullets.push({ x: player.x - 65, y: player.y + 4, vx: 650, vy: -22, age: 0.04, life: 0.6, hit: false });
+      game.particles.push({ kind: 'spark', x: player.x - 18, y: player.y + 6, vx: -80, vy: 45, age: 0, life: 0.45, size: 2.5, color: '255,220,120' });
+      game.particles.push({ kind: 'spark', x: player.x - 16, y: player.y - 5, vx: -70, vy: -50, age: 0, life: 0.45, size: 2.5, color: '255,220,120' });
+      camera.snap(player.x + 25, player.y);
       return true;
     }
     if (name === 'wanted') {
@@ -593,17 +660,35 @@ window.__harbor = {
       return true;
     }
     if (name === 'mission') {
+      player.inCar = null;
+      if (engineRunning) { stopEngine(); engineRunning = false; }
+      this.setWanted(0);
+      resetPolice(policeState);
+      game.skidmarks.length = 0;
+      game.particles.length = 0;
+      game.bullets.length = 0;
+      game.notifications.length = 0;
+      game.rain = false;
       startMissionByIndex(missionState, 0);
       game.objective = currentObjective(missionState);
-      this.setTime(11.5);
-      this.teleport(4220, 1180);
-      game.mission = { waypoint: { x: 4500, y: 1180 } };
+      this.setTime(17.7);
+      this.teleport(4488, 1180);
+      player.angle = 0;
+      player.health = 100;
+      player.armour = 60;
+      combat.weapon = 'pistol';
+      const dockCar = createVehicle(4386, 1142, 0.14, 'sports');
+      dockCar.color = '#d93d32';
+      dockCar.headlights = true;
+      parkedCars.push(dockCar);
+      game.mission = { waypoint: { x: 4532, y: 1180 } };
       game.dialogue = 'Marcus: "Head to the docks. I\'ve got a job for you."';
       game.dialogueTimer = 1.0;
       missionState.dialogue = game.dialogue;
       missionState.dialogueTimer = 1.0;
+      game.district = world.districtAt(player.x, player.y);
       updateMissionBlips();
-      camera.snap(player.x, player.y);
+      camera.snap(4400, 1180);
       return true;
     }
     return true;
@@ -616,7 +701,15 @@ window.__harbor = {
   teleport(x, y) {
     player.x = clamp(x, PLAYER.radius, world.w - PLAYER.radius);
     player.y = clamp(y, PLAYER.radius, world.h - PLAYER.radius);
+    if (player.inCar) {
+      player.inCar.x = player.x;
+      player.inCar.y = player.y;
+    }
     camera.snap(player.x, player.y);
+  },
+  setRain(on) {
+    game.rain = Boolean(on);
+    return game.rain;
   },
   spawnTraffic(n) {
     const extra = spawnTraffic(world, roadGraph, rng, n || 8);
